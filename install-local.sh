@@ -3,44 +3,24 @@
 set -euo pipefail
 
 SCRIPT="macapps"
-TEMPDIR="/tmp/$SCRIPT"
-BINSRC="$TEMPDIR/bin"
+BINSRC="./bin"
 BINDEST="$HOME/.local/bin"
-
-REPO_URL="https://github.com/johnvilsack/${SCRIPT}.git"
-EXISTING_HASH_FILE="$HOME/.local/.${SCRIPT}_last_hash"
-CURRENT_HASH=$(curl -s https://api.github.com/repos/johnvilsack/$SCRIPT/commits/HEAD | grep '"sha"' | head -1 | cut -d'"' -f4)
-
-function check_hash() {
-  if [ -e "$EXISTING_HASH_FILE" ]; then
-      LAST_HASH=$(cat "$EXISTING_HASH_FILE")
-  else
-      LAST_HASH=""
-  fi
-
-  if [ "$CURRENT_HASH" == "$LAST_HASH" ]; then
-      echo "$SCRIPT is already up to date."
-  else
-      echo "New version of $SCRIPT detected. Updating..."
-      run_installer
-  fi
-}
 
 function run_installer() {
   echo "Installing $SCRIPT to $BINDEST..."
 
-  # Clone or download
-  if command -v git >/dev/null 2>&1; then
-      [ -d "$TEMPDIR" ] && rm -rf "$TEMPDIR"
-      git clone "$REPO_URL" "$TEMPDIR"
-      cd "$BINSRC"
-  else
-      echo "Git not found. Please install git first."
+  # Verify bin directory exists
+  if [ ! -d "$BINSRC" ]; then
+      echo "Error: bin directory not found in current location"
+      echo "Make sure you're running this from the $SCRIPT repository root"
       exit 1
   fi
 
   mkdir -p "$BINDEST"
 
+  # Change to bin directory first
+  cd "$BINSRC"
+  
   find . -type f | while read -r file; do
       # Remove leading ./ from find output
       file="${file#./}"
@@ -53,6 +33,7 @@ function run_installer() {
 
       # Copy (overwrite if exists)
       cp "$BINSRC_file" "$BINDEST_file"
+      echo "Copied $BINSRC_file to $BINDEST_file"
 
       # Make executable if it's a script
       if head -c 2 "$BINSRC_file" | grep -q '^#!'; then
@@ -61,18 +42,15 @@ function run_installer() {
           chmod +x "$BINDEST_file"
       fi
   done
+  
+  cd - >/dev/null
 
   echo "Installed scripts to $BINDEST"
-  
-  # Save the hash after successful installation
-  echo "$CURRENT_HASH" > "$EXISTING_HASH_FILE"
 }
 
 function main() {
     echo "Running $SCRIPT installer..."
-    check_hash
-    # Cleanup
-    rm -rf "$TEMPDIR"
+    run_installer
 
     echo "$SCRIPT installed!"
 }
