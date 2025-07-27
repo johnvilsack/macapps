@@ -42,21 +42,25 @@ function run_installer() {
   mkdir -p "$BINDEST"
 
   find . -type f | while read -r file; do
-      BINSRC_file="$BINSRC/$file"
-      BINDEST_file="$BINDEST/$file"
 
-      # Ensure BINDESTination subdirectory exists
-      mkdir -p "$(dirname "$BINDEST_file")"
+    # Remove leading ./ from find output
+    file="${file#./}"
+    
+    BINSRC_file="$BINSRC/$file"
+    BINDEST_file="$BINDEST/$file"
 
-      # Copy (overwrite if exists)
-      cp "$BINSRC_file" "$BINDEST_file"
+    # Ensure BINDESTination subdirectory exists
+    mkdir -p "$(dirname "$BINDEST_file")"
 
-      # Make executable if it's a SCRIPT
-      if head -c 2 "$BINSRC_file" | grep -q '^#!'; then
-          chmod +x "$BINDEST_file"
-      elif [[ "$BINSRC_file" == *.sh || "$BINSRC_file" == *.ps1 ]]; then
-          chmod +x "$BINDEST_file"
-      fi
+    # Copy (overwrite if exists)
+    cp "$BINSRC_file" "$BINDEST_file"
+
+    # Make executable if it's a SCRIPT
+    if head -c 2 "$BINSRC_file" | grep -q '^#!'; then
+        chmod +x "$BINDEST_file"
+    elif [[ "$BINSRC_file" == *.sh || "$BINSRC_file" == *.ps1 ]]; then
+        chmod +x "$BINDEST_file"
+    fi
   done
 
   echo "Installed SCRIPTs to $BINDEST"
