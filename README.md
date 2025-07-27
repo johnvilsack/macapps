@@ -1,2 +1,5 @@
-# macapps
-Collection of scripts I've made into mini apps
+## Quick Install
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/johnvilsack/macapps/HEAD/install.sh | bash
+```
