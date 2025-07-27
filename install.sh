@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # install.sh - Install mac apps
+echo "Installing mac apps..."
 set -euo pipefail
 
 script="macapps"
@@ -21,6 +22,7 @@ function check_hash() {
   if [ "$CURRENT_HASH" == "$LAST_HASH" ]; then
       echo "$script is already up to date."
   else
+        echo "New version of $script detected. Updating..."
       run_installer
   fi
 }
@@ -62,6 +64,7 @@ function run_installer() {
 }
 
 function main() {
+    echo "Running $script installer..."
   check_hash
   # Cleanup
   rm -rf "$TEMPDIR"
