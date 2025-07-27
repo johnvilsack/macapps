@@ -7,16 +7,6 @@ TEMPDIR="/tmp/$SCRIPT"
 BINSRC="$TEMPDIR/bin"
 BINDEST="$HOME/.local/bin"
 
-# Download the SCRIPT
-curl -fsSL https://raw.githubusercontent.com/johnvilsack/macapps/HEAD/install.sh -o install.sh
-
-# Check if it downloaded
-ls -la install.sh
-cat install.sh
-
-# Execute with debugging
-bash -x install.sh
-
 REPO_URL="https://github.com/johnvilsack/${SCRIPT}.git"
 EXISTING_HASH_FILE="$HOME/.local/.${SCRIPT}_last_hash"
 CURRENT_HASH=$(curl -s https://api.github.com/repos/johnvilsack/$SCRIPT/commits/HEAD | grep '"sha"' | head -1 | cut -d'"' -f4)
