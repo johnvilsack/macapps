@@ -1,16 +1,25 @@
 #!/usr/bin/env bash
 # install.sh - Install mac apps
-echo "Installing mac apps..."
 set -euo pipefail
 
-script="macapps"
-TEMPDIR="/tmp/$script"
+SCRIPT="macapps"
+TEMPDIR="/tmp/$SCRIPT"
 BINSRC="$TEMPDIR/bin"
 BINDEST="$HOME/.local/bin"
 
-REPO_URL="https://github.com/johnvilsack/${script}.git"
-EXISTING_HASH_FILE="$HOME/.local/.${script}_last_hash"
-CURRENT_HASH=$(curl -s https://api.github.com/repos/johnvilsack/$script/commits/HEAD | grep '"sha"' | head -1 | cut -d'"' -f4)
+# Download the SCRIPT
+curl -fsSL https://raw.githubusercontent.com/johnvilsack/macapps/HEAD/install.sh -o install.sh
+
+# Check if it downloaded
+ls -la install.sh
+cat install.sh
+
+# Execute with debugging
+bash -x install.sh
+
+REPO_URL="https://github.com/johnvilsack/${SCRIPT}.git"
+EXISTING_HASH_FILE="$HOME/.local/.${SCRIPT}_last_hash"
+CURRENT_HASH=$(curl -s https://api.github.com/repos/johnvilsack/$SCRIPT/commits/HEAD | grep '"sha"' | head -1 | cut -d'"' -f4)
 
 function check_hash() {
   if [ -e "$EXISTING_HASH_FILE" ]; then
@@ -20,15 +29,15 @@ function check_hash() {
   fi
 
   if [ "$CURRENT_HASH" == "$LAST_HASH" ]; then
-      echo "$script is already up to date."
+      echo "$SCRIPT is already up to date."
   else
-        echo "New version of $script detected. Updating..."
+        echo "New version of $SCRIPT detected. Updating..."
       run_installer
   fi
 }
 
 function run_installer() {
-  echo "Installing $script to $BINDEST..."
+  echo "Installing $SCRIPT to $BINDEST..."
 
   # Clone or download
   if command -v git >/dev/null 2>&1; then
@@ -52,7 +61,7 @@ function run_installer() {
       # Copy (overwrite if exists)
       cp "$BINSRC_file" "$BINDEST_file"
 
-      # Make executable if it's a script
+      # Make executable if it's a SCRIPT
       if head -c 2 "$BINSRC_file" | grep -q '^#!'; then
           chmod +x "$BINDEST_file"
       elif [[ "$BINSRC_file" == *.sh || "$BINSRC_file" == *.ps1 ]]; then
@@ -60,14 +69,16 @@ function run_installer() {
       fi
   done
 
-  echo "Installed scripts to $BINDEST"
+  echo "Installed SCRIPTs to $BINDEST"
 }
 
 function main() {
-    echo "Running $script installer..."
+    echo "Running $SCRIPT installer..."
   check_hash
   # Cleanup
   rm -rf "$TEMPDIR"
 
-  echo "$script installed!"
+  echo "$SCRIPT installed!"
 }
+
+main
