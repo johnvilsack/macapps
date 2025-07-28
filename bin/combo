@@ -1,0 +1,33 @@
+#!/bin/bash
+set -euo pipefail
+
+# Usage: combo <source_folder> <output_file>
+
+if [[ $# -lt 2 ]]; then
+  echo "Usage: $0 <source_folder> <output_file>"
+  exit 1
+fi
+
+SOURCE_DIR="$1"
+OUTPUT_FILE="$2"
+
+if [[ ! -d "$SOURCE_DIR" ]]; then
+  echo "Error: '$SOURCE_DIR' is not a directory"
+  exit 2
+fi
+
+# Truncate or create the output file
+> "$OUTPUT_FILE"
+
+# Loop through all regular files in the source directory
+for file in "$SOURCE_DIR"/*; do
+  [[ -f "$file" ]] || continue
+  BASENAME=$(basename "$file")
+  
+  {
+    echo "################## $BASENAME START ##################"
+    cat "$file"
+    echo "################## $BASENAME END ####################"
+    echo
+  } >> "$OUTPUT_FILE"
+done
