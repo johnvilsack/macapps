@@ -33,15 +33,33 @@ DEFAULT_MAX_ROTATED_FILES=10  # Number of rotated logs to keep
 # ============================================================================
 
 # Color definitions (compatible with both macOS and Linux)
+# Get all colors
+# curl -s https://gist.githubusercontent.com/HaleTom/89ffe32783f89f403bba96bd7bcd1263/raw/e50a28ec54188d2413518788de6c6367ffcea4f7/print256colours.sh | bash
+
+# Foreground: \e[38;5;<n>m
+# Background: \e[48;5;<n>m
+# Reset: \e[0m
+# Styles
+#    1; bold,
+#    2; dim,
+#    3; italic,
+#    4; underline,
+#    5; blink,
+#    7; reverse,
+#    8; hidden
+
 declare -A COLORS=(
-    ["INFO"]="\033[1;34m"      # Blue
-    ["WARNING"]="\033[1;33m"   # Yellow  
-    ["ERROR"]="\033[1;31m"     # Red
-    ["SUCCESS"]="\033[1;32m"   # Green
-    ["DEBUG"]="\033[1;35m"     # Magenta
-    ["TRACE"]="\033[1;36m"     # Cyan
+    ["INFO"]="\e[1;38;5;33m"      # Blue
+    ["WARNING"]="\e[1;38;5;208m"   # Yellow  
+    ["ERROR"]="\e[1;38;5;197m"     # Red
+    ["SUCCESS"]="\e[1;38;5;46m"   # Green
+    ["DEBUG"]="\e[1;38;5;93m"     # Magenta
+    ["TRACE"]="\e[1;38;5;207m"     # Cyan
+
+   
+
 )
-COLOR_RESET="\033[0m"
+COLOR_RESET="\e[0m"
 
 # Initialize variables from defaults or environment
 LOG_PATH="${CLOG_PATH:-$DEFAULT_LOG_PATH}"
