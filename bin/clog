@@ -43,9 +43,6 @@ declare -A COLORS=(
 )
 COLOR_RESET="\033[0m"
 
-# Stash the original logtag to see if we should print it to the screen
-SCRIPT_DEFAULT_LOG_TAG="${DEFAULT_LOG_TAG}"
-
 # Initialize variables from defaults or environment
 LOG_PATH="${CLOG_PATH:-$DEFAULT_LOG_PATH}"
 LOG_FILENAME="${CLOG_FILENAME:-$DEFAULT_LOG_FILENAME}"
@@ -104,6 +101,8 @@ ENVIRONMENT VARIABLES:
     CLOG_DISABLE_COLOR      Disable colors (true/false)
     CLOG_MAX_SIZE           Max log file size in bytes
     CLOG_MAX_ROTATED_FILES  Max number of rotated files to keep
+    CLOG_DISPLAY_TAG        Show log tag in console output (true/false)
+
 
 SET DEFAULTS:
     export CLOG_PATH="$HOME/Library/Logs/clog"
@@ -115,7 +114,7 @@ SET DEFAULTS:
     export CLOG_DISABLE_COLOR=false
     export CLOG_MAX_SIZE=5242880
     export CLOG_MAX_ROTATED_FILES=10
-
+    export CLOG_DISPLAY_TAG=false
 
 FILE FORMAT:
     [Mon Jan 15 10:30:45 2024] [TAG] [LEVEL] [PID] Message
@@ -240,7 +239,7 @@ clog() {
     echo "$file_entry" >> "$logfile" || {
         echo "Error: Failed to write to log file: $logfile" >&2
     }
-    
+
     # Console output
     if [[ "$OUTPUT_JSON" == true ]]; then
         output_json "$level" "$message"
@@ -250,8 +249,7 @@ clog() {
         [[ "$SHOW_TIMESTAMP" == true ]] && timestamp="[$(date '+%H:%M:%S')] "
 
         local tag_and_pid=""
-
-        if [[ "$DISPLAY_TAG" == true && "$LOG_TAG" != "$DEFAULT_LOG_TAG" ]]; then
+        if [[ "${DISPLAY_TAG,,}" == "true" ]]; then
             if [[ "$SHOW_PID" == true ]]; then
                 tag_and_pid="$LOG_TAG[$$] "
             else
@@ -261,7 +259,7 @@ clog() {
             tag_and_pid="[$$] "
         fi
 
-        printf "%s%s${COLORS[$level]}[%s]${COLOR_RESET} %s\n" \
+        printf "%s${COLORS[$level]}%s[%s]${COLOR_RESET} %s\n" \
             "$timestamp" "$tag_and_pid" "$level" "$message"
 
         ###
