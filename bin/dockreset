@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# === CONFIG ===
+DEFAULT_COMPOSE_FILENAME="docker-compose.yml"
+
+# === USAGE CHECK ===
+if [[ $# -ne 1 ]]; then
+    echo "Usage: $(basename "$0") /path/to/compose-folder"
+    exit 1
+fi
+
+COMPOSE_DIR="$1"
+COMPOSE_FILE="$COMPOSE_DIR/$DEFAULT_COMPOSE_FILENAME"
+
+if [[ ! -f "$COMPOSE_FILE" ]]; then
+    echo "Error: $COMPOSE_FILE not found."
+    exit 2
+fi
+
+# === EXECUTION ===
+echo "[+] Navigating to $COMPOSE_DIR"
+cd "$COMPOSE_DIR"
+
+echo "[+] Stopping and removing containers and volumes..."
+docker-compose down --volumes --remove-orphans
+
+echo "[+] Pruning unused Docker volumes..."
+docker volume prune -f
+
+# Optional: define expected bind mount paths to wipe
+ROOT_MOUNT_PATH="../volumes/ubuntu/root"
+HOME_MOUNT_PATH="../volumes/ubuntu/home"
+
+echo "[+] Clearing bind mount folders (host-side persistence)..."
+rm -rf "$ROOT_MOUNT_PATH"/* "$HOME_MOUNT_PATH"/*
+
+echo "[+] Rebuilding Docker image without cache..."
+docker-compose build --no-cache
+
+echo "[+] Starting containers..."
+docker-compose up -d
+
+echo "[+] Done. Containers are up."
