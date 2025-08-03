@@ -1,5 +1,8 @@
 # Changelog
 
+## [1.1.0-2] - 2025-08-03
+- Testing multiline configuration again
+
 ## [1.1.0-1] - 2025-08-03
 - Testing multiline configuration
 
