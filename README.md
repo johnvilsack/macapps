@@ -9,6 +9,9 @@ curl -fsSL https://raw.githubusercontent.com/johnvilsack/macapps/HEAD/install.sh
 "update" to get any changed values
 "write" writes .settings file to defaults write
 
+## gitversion
+auto versioning for repos
+
 ## clog
 Pretty printing for logging
 
