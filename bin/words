@@ -1,0 +1,10 @@
+#!/bin/bash
+
+words() {
+  count=${2:-25}
+  dest=${1:-test.txt}
+  shuf -n $count /usr/share/dict/words > $dest
+  echo "Filled file: $dest"
+}
+
+words "$@"

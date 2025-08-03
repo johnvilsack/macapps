@@ -8,6 +8,20 @@ IGNORE_FILE="${CONFIG_DIR}/.comboignore"
 OUTPUT_FILE="${1:-combined_output.txt}"
 HONOR_GITIGNORE="${HONOR_GITIGNORE:-true}"
 
+# Default exclusions
+DEFAULT_EXCLUDES=(
+    ".git"
+    ".gitignore"
+    ".gitattributes"
+    "node_modules"
+    ".direnv"
+    "__pycache__"
+    ".venv"
+    "venv"
+    ".npm"
+    ".vscode"
+)
+
 # Function to check if file is binary
 is_binary() {
     local file="$1"
@@ -21,32 +35,114 @@ is_binary() {
     esac
 }
 
+# Function to expand variables in path
+expand_variables() {
+    local path="$1"
+    path="${path/#\$HOME/$HOME}"
+    path="${path/#\$GITHUBPATH/${GITHUBPATH:-}}"
+    path="${path/#\~/$HOME}"
+    echo "$path"
+}
+
+# Function to check if path matches pattern with proper glob support
+matches_pattern() {
+    local path="$1"
+    local pattern="$2"
+    local rel_path="${path#$PWD/}"
+    
+    # Expand variables in pattern
+    pattern=$(expand_variables "$pattern")
+    
+    # Handle different pattern types
+    case "$pattern" in
+        */*)
+            # Pattern contains slash - match full relative path
+            [[ "$rel_path" == $pattern ]] && return 0
+            [[ "$rel_path" == */$pattern ]] && return 0
+            ;;
+        *)
+            # Simple pattern - match basename or anywhere in path
+            [[ "$(basename "$rel_path")" == $pattern ]] && return 0
+            [[ "$rel_path" == */$pattern ]] && return 0
+            [[ "$rel_path" == $pattern ]] && return 0
+            ;;
+    esac
+    return 1
+}
+
+# Function to check against source file patterns
+check_combosource() {
+    local path="$1"
+    local source_file="$2"
+    
+    [[ ! -f "$source_file" ]] && return 1
+    
+    while IFS= read -r pattern || [[ -n "$pattern" ]]; do
+        [[ -z "$pattern" || "$pattern" =~ ^# ]] && continue
+        pattern=$(expand_variables "$pattern")
+        
+        # Check if path is under this pattern
+        if [[ -d "$pattern" ]]; then
+            [[ "$path" == "$pattern"/* || "$path" == "$pattern" ]] && return 0
+        elif [[ -f "$pattern" ]]; then
+            [[ "$path" == "$pattern" ]] && return 0
+        fi
+    done < "$source_file"
+    return 1
+}
+
 # Function to check if path should be ignored
 should_ignore() {
     local path="$1"
-    local rel_path="${path#$PWD/}"
+    local current_dir="$2"
+    local rel_path="${path#$current_dir/}"
     
-    # Check .comboignore
-    if [[ -f "$IGNORE_FILE" ]]; then
-        while IFS= read -r pattern || [[ -n "$pattern" ]]; do
-            [[ -z "$pattern" || "$pattern" =~ ^# ]] && continue
-            # Use fnmatch-style pattern matching
-            if [[ "$rel_path" == $pattern || "$rel_path" == */$pattern || $(basename "$rel_path") == $pattern ]]; then
-                return 0
-            fi
-        done < "$IGNORE_FILE"
-    fi
+    # 1. Check default exclusions first (unless in .combosource)
+    for exclude in "${DEFAULT_EXCLUDES[@]}"; do
+        if matches_pattern "$path" "$exclude"; then
+            # Check if explicitly included in any .combosource
+            local check_dir="$current_dir"
+            while [[ "$check_dir" != "/" ]]; do
+                if check_combosource "$path" "$check_dir/.combosource"; then
+                    break 2  # Break out of both loops - don't ignore
+                fi
+                check_dir=$(dirname "$check_dir")
+            done
+            return 0  # Ignore this default exclusion
+        fi
+    done
     
-    # Check .gitignore if enabled
-    if [[ "$HONOR_GITIGNORE" == "true" && -f ".gitignore" ]]; then
-        # Simple gitignore check (doesn't handle all gitignore syntax)
-        while IFS= read -r pattern || [[ -n "$pattern" ]]; do
-            [[ -z "$pattern" || "$pattern" =~ ^# ]] && continue
-            pattern="${pattern%/}"  # Remove trailing slash
-            if [[ "$rel_path" == $pattern || "$rel_path" == */$pattern || $(basename "$rel_path") == $pattern ]]; then
-                return 0
+    # 2. Check .comboignore (highest priority)
+    local check_dir="$current_dir"
+    while [[ "$check_dir" != "/" ]]; do
+        local ignore_file="$check_dir/.comboignore"
+        if [[ -f "$ignore_file" ]]; then
+            while IFS= read -r pattern || [[ -n "$pattern" ]]; do
+                [[ -z "$pattern" || "$pattern" =~ ^# ]] && continue
+                if matches_pattern "$path" "$pattern"; then
+                    return 0
+                fi
+            done < "$ignore_file"
+        fi
+        check_dir=$(dirname "$check_dir")
+    done
+    
+    # 3. Check .gitignore (lowest priority)
+    if [[ "$HONOR_GITIGNORE" == "true" ]]; then
+        check_dir="$current_dir"
+        while [[ "$check_dir" != "/" ]]; do
+            local gitignore_file="$check_dir/.gitignore"
+            if [[ -f "$gitignore_file" ]]; then
+                while IFS= read -r pattern || [[ -n "$pattern" ]]; do
+                    [[ -z "$pattern" || "$pattern" =~ ^# ]] && continue
+                    pattern="${pattern%/}"
+                    if matches_pattern "$path" "$pattern"; then
+                        return 0
+                    fi
+                done < "$gitignore_file"
             fi
-        done < ".gitignore"
+            check_dir=$(dirname "$check_dir")
+        done
     fi
     
     return 1
@@ -55,10 +151,11 @@ should_ignore() {
 # Function to process a single file
 process_file() {
     local file="$1"
-    local rel_path="${file#$PWD/}"
+    local base_dir="${2:-$PWD}"
+    local rel_path="${file#$base_dir/}"
     
     # Skip if should be ignored
-    should_ignore "$file" && return
+    should_ignore "$file" "$base_dir" && return
     
     # Skip binary files
     is_binary "$file" && return
@@ -74,14 +171,57 @@ process_file() {
 # Function to process directory recursively
 process_directory() {
     local dir="$1"
+    local base_dir="${2:-$PWD}"
     
     # Skip if directory should be ignored
-    should_ignore "$dir" && return
+    should_ignore "$dir" "$base_dir" && return
+    
+    # Check for nested .combosource files
+    local nested_sources=()
+    while IFS= read -r -d '' source_file; do
+        nested_sources+=("$source_file")
+    done < <(find "$dir" -name ".combosource" -not -path "$CONFIG_DIR/.combosource" -print0 2>/dev/null)
+    
+    # Process nested .combosource files first
+    for nested_source in "${nested_sources[@]}"; do
+        local nested_dir=$(dirname "$nested_source")
+        process_combosource_file "$nested_source" "$nested_dir"
+    done
     
     # Process all files in directory
     find "$dir" -type f 2>/dev/null | while IFS= read -r file; do
-        process_file "$file"
+        # Skip .combosource files themselves
+        [[ "$(basename "$file")" == ".combosource" ]] && continue
+        process_file "$file" "$base_dir"
     done
+}
+
+# Function to process entries from a .combosource file
+process_combosource_file() {
+    local source_file="$1"
+    local source_dir="$2" 
+    
+    while IFS= read -r entry || [[ -n "$entry" ]]; do
+        [[ -z "$entry" || "$entry" =~ ^# ]] && continue
+        
+        entry=$(expand_variables "$entry")
+        
+        # Handle relative paths relative to the .combosource file location
+        if [[ "$entry" != /* ]]; then
+            entry="$source_dir/$entry"
+        fi
+        
+        # Only process if outside root generation path or specifically included
+        if [[ "$entry" != "$PWD"/* ]] || check_combosource "$entry" "$source_file"; then
+            if [[ -f "$entry" ]]; then
+                process_file "$entry" "$source_dir"
+            elif [[ -d "$entry" ]]; then
+                process_directory "$entry" "$source_dir"
+            else
+                echo "Warning: '$entry' not found, skipping..." >&2
+            fi
+        fi
+    done < "$source_file"
 }
 
 # Function to add entry to .combosource
@@ -91,6 +231,13 @@ combo_add() {
     
     # Resolve to absolute path
     target=$(realpath "$target" 2>/dev/null || echo "$target")
+    
+    # Convert to variable form if applicable
+    if [[ "$target" == "$HOME"/* ]]; then
+        target="\$HOME${target#$HOME}"
+    elif [[ -n "${GITHUBPATH:-}" && "$target" == "$GITHUBPATH"/* ]]; then
+        target="\$GITHUBPATH${target#$GITHUBPATH}"
+    fi
     
     # Check if already exists
     if [[ -f "$file" ]] && grep -Fxq "$target" "$file" 2>/dev/null; then
@@ -114,28 +261,23 @@ combo() {
     
     # Check if .combosource exists
     if [[ ! -f "$SOURCE_FILE" ]]; then
-        echo "Error: No .combosource file found at $SOURCE_FILE"
-        echo "Create one with: echo 'path/to/file/or/dir' > .combosource"
-        echo "Or use: combo_add 'path/to/file/or/dir'"
-        exit 1
+        echo "No .combosource file found."
+        read -p "Generate output from current directory? (y/N): " -n 1 -r
+        echo
+        if [[ $REPLY =~ ^[Yy]$ ]]; then
+            # Process current directory
+            process_directory "$PWD"
+            echo "Combined output written to: $OUTPUT_FILE"
+        else
+            echo "Create .combosource with: echo 'path/to/file/or/dir' > .combosource"
+            echo "Or use: ccombo add 'path/to/file/or/dir'"
+            exit 1
+        fi
+        return
     fi
     
-    # Process each entry in .combosource
-    while IFS= read -r entry || [[ -n "$entry" ]]; do
-        # Skip empty lines and comments
-        [[ -z "$entry" || "$entry" =~ ^# ]] && continue
-        
-        # Expand ~ to home directory
-        entry="${entry/#\~/$HOME}"
-        
-        if [[ -f "$entry" ]]; then
-            process_file "$entry"
-        elif [[ -d "$entry" ]]; then
-            process_directory "$entry"
-        else
-            echo "Warning: '$entry' not found, skipping..." >&2
-        fi
-    done < "$SOURCE_FILE"
+    # Process root .combosource file
+    process_combosource_file "$SOURCE_FILE" "$CONFIG_DIR"
     
     echo "Combined output written to: $OUTPUT_FILE"
 }

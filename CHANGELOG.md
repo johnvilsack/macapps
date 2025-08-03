@@ -1,5 +1,8 @@
 # Changelog
 
+## [1.2.0] - 2025-08-03
+- FEATURE: Modified ccombo
+
 ## [1.1.0-2] - 2025-08-03
 - Testing multiline configuration again
 
