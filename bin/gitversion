@@ -1,0 +1,256 @@
+#!/bin/bash
+# gitversion - Semantic versioning automation CLI tool
+set -euo pipefail
+
+VERSION_FILE=".version"
+CHANGELOG_FILE="CHANGELOG.md"
+
+# Function to read current version
+read_version() {
+    if [[ -f "$VERSION_FILE" ]]; then
+        cat "$VERSION_FILE"
+    else
+        echo "0.0.0"
+    fi
+}
+
+# Parse semantic version into components
+parse_version() {
+    local version=$1
+    echo "$version" | sed -E 's/^v?([0-9]+)\.([0-9]+)\.([0-9]+)$/\1 \2 \3/'
+}
+
+# Increment version based on type
+increment_version() {
+    local current=$1
+    local increment_type=$2
+    
+    read -r major minor patch <<< "$(parse_version "$current")"
+    
+    case "$increment_type" in
+        major)
+            echo "$((major + 1)).0.0"
+            ;;
+        minor)
+            echo "$major.$((minor + 1)).0"
+            ;;
+        patch)
+            echo "$major.$minor.$((patch + 1))"
+            ;;
+        *)
+            echo "$current"
+            ;;
+    esac
+}
+
+# Determine increment type from commit message
+get_increment_type() {
+    local message=$1
+    local prefix=$(echo "$message" | cut -d: -f1 | tr '[:upper:]' '[:lower:]' | xargs)
+    
+    case "$prefix" in
+        major|release|breaking)
+            echo "major"
+            ;;
+        minor|feature|feat)
+            echo "minor"
+            ;;
+        patch|fix)
+            echo "patch"
+            ;;
+        *)
+            echo "none"
+            ;;
+    esac
+}
+
+# Update changelog
+update_changelog() {
+    local version=$1
+    local message=$2
+    local date=$(date +%Y-%m-%d)
+    
+    # Remove version suffix from message if present
+    local clean_message=$(echo "$message" | sed -E 's/ \[v?[0-9]+\.[0-9]+\.[0-9]+\]$//')
+    
+    # Create changelog if it doesn't exist
+    if [[ ! -f "$CHANGELOG_FILE" ]]; then
+        echo "# Changelog" > "$CHANGELOG_FILE"
+        echo "" >> "$CHANGELOG_FILE"
+    fi
+    
+    # Create temp file with new entry
+    local temp_file=$(mktemp)
+    
+    # Add new version header
+    echo "## [$version] - $date" > "$temp_file"
+    echo "### $clean_message" >> "$temp_file"
+    echo "" >> "$temp_file"
+    
+    # Append existing changelog content (skip the header)
+    if [[ -f "$CHANGELOG_FILE" ]]; then
+        tail -n +3 "$CHANGELOG_FILE" >> "$temp_file" 2>/dev/null || true
+    fi
+    
+    # Prepend header and save
+    echo "# Changelog" > "$CHANGELOG_FILE"
+    echo "" >> "$CHANGELOG_FILE"
+    cat "$temp_file" >> "$CHANGELOG_FILE"
+    rm "$temp_file"
+}
+
+# Create git tag
+create_tag() {
+    local version=$1
+    local increment_type=$2
+    
+    # Create tag for major and minor versions
+    if [[ "$increment_type" == "major" ]] || [[ "$increment_type" == "minor" ]]; then
+        local tag_name
+        if [[ "$increment_type" == "major" ]]; then
+            tag_name="release-v$version"
+        else
+            tag_name="v$version"
+        fi
+        
+        git tag -a "$tag_name" -m "Release version $version"
+        echo "Created tag: $tag_name"
+    fi
+}
+
+# Process versioning for a commit message
+process_version() {
+    local commit_message=$1
+    local repo_path=${2:-$(pwd)}
+    
+    # Change to repo directory
+    cd "$repo_path"
+    
+    # Check if we're in a git repo
+    if [[ ! -d ".git" ]]; then
+        echo "Error: Not in a git repository: $repo_path"
+        exit 1
+    fi
+    
+    # Create .version file if it doesn't exist
+    if [[ ! -f "$VERSION_FILE" ]]; then
+        echo "0.0.0" > "$VERSION_FILE"
+        echo "Created $VERSION_FILE with initial version 0.0.0"
+    fi
+    
+    local increment_type=$(get_increment_type "$commit_message")
+    local current_version=$(read_version)
+    local new_version="$current_version"
+    
+    if [[ "$increment_type" != "none" ]]; then
+        new_version=$(increment_version "$current_version" "$increment_type")
+        
+        # Update version file
+        echo "$new_version" > "$VERSION_FILE"
+        echo "Updated version: $current_version → $new_version"
+        
+        # Update changelog
+        update_changelog "$new_version" "$commit_message"
+        echo "Updated $CHANGELOG_FILE"
+        
+        # Append version to commit message
+        commit_message="${commit_message} [${new_version}]"
+    fi
+    
+    # Add all files and commit
+    git add .
+    git commit -m "$commit_message"
+    echo "Committed with message: $commit_message"
+    
+    # Create tag if needed
+    if [[ "$increment_type" != "none" ]]; then
+        create_tag "$new_version" "$increment_type"
+    fi
+    
+    # Push changes
+    git push origin HEAD
+    if [[ "$increment_type" == "major" ]] || [[ "$increment_type" == "minor" ]]; then
+        git push --tags
+    fi
+    echo "Pushed to remote"
+}
+
+# Find repository in GITHUBPATH
+find_repo() {
+    local repo_name=$1
+    
+    if [[ -z "${GITHUBPATH:-}" ]]; then
+        echo "Error: GITHUBPATH environment variable not set"
+        exit 1
+    fi
+    
+    if [[ ! -d "$GITHUBPATH" ]]; then
+        echo "Error: GITHUBPATH directory not found: $GITHUBPATH"
+        exit 1
+    fi
+    
+    local repo_path="$GITHUBPATH/$repo_name"
+    if [[ -d "$repo_path" ]]; then
+        echo "$repo_path"
+    else
+        echo "Error: Repository '$repo_name' not found in $GITHUBPATH"
+        exit 1
+    fi
+}
+
+# Main function
+main() {
+    local original_pwd=$(pwd)
+    
+    case $# in
+        0)
+            # gitversion (no args) - commit in current repo
+            process_version "simple changes"
+            ;;
+        1)
+            if [[ "$1" == "--help" ]] || [[ "$1" == "-h" ]]; then
+                # Show usage
+                echo "Usage:"
+                echo "  gitversion                           - Commit current repo with 'simple changes'"
+                echo "  gitversion \"message\"                 - Commit current repo with custom message"
+                echo "  gitversion <reponame>                - Commit remote repo with 'simple changes'"
+                echo "  gitversion <reponame> \"message\"      - Commit remote repo with custom message"
+                echo ""
+                echo "Version prefixes (case-insensitive):"
+                echo "  major|release|breaking: <message>   - Bumps major version"
+                echo "  minor|feature|feat: <message>       - Bumps minor version"
+                echo "  patch|fix: <message>                - Bumps patch version"
+                exit 0
+            elif [[ "$1" == *" "* ]]; then
+                # gitversion "Commit message here" - commit in current repo
+                process_version "$1"
+            else
+                # gitversion <reponame> - commit in remote repo
+                local repo_path=$(find_repo "$1")
+                process_version "simple changes" "$repo_path"
+                cd "$original_pwd"
+            fi
+            ;;
+        2)
+            # gitversion <reponame> "Commit message here" - commit in remote repo
+            local repo_path=$(find_repo "$1")
+            process_version "$2" "$repo_path"
+            cd "$original_pwd"
+            ;;
+        *)
+            echo "Usage:"
+            echo "  gitversion                           - Commit current repo with 'simple changes'"
+            echo "  gitversion \"message\"                 - Commit current repo with custom message"
+            echo "  gitversion <reponame>                - Commit remote repo with 'simple changes'"
+            echo "  gitversion <reponame> \"message\"      - Commit remote repo with custom message"
+            echo ""
+            echo "Version prefixes (case-insensitive):"
+            echo "  major|release|breaking: <message>   - Bumps major version"
+            echo "  minor|feature|feat: <message>       - Bumps minor version"
+            echo "  patch|fix: <message>                - Bumps patch version"
+            exit 1
+            ;;
+    esac
+}
+
+main "$@"
