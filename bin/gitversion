@@ -259,22 +259,16 @@ main() {
                 echo "Usage:"
                 echo "  gitversion                           - Commit current repo with 'simple changes'"
                 echo "  gitversion \"message\"                 - Commit current repo with custom message"
-                echo "  gitversion <reponame>                - Commit remote repo with 'simple changes'"
-                echo "  gitversion <reponame> \"message\"      - Commit remote repo with custom message"
+                echo "  gitversion reponame \"message\"        - Commit remote repo with custom message"
                 echo ""
                 echo "Version prefixes (case-insensitive):"
                 echo "  major|release|breaking: <message>   - Bumps major version"
                 echo "  minor|feature|feat: <message>       - Bumps minor version"
                 echo "  patch|fix: <message>                - Bumps patch version"
                 exit 0
-            elif [[ "$1" == *" "* ]]; then
-                # gitversion "Commit message here" - commit in current repo
-                process_version "$1"
             else
-                # gitversion <reponame> - commit in remote repo
-                local repo_path=$(find_repo "$1")
-                process_version "simple changes" "$repo_path"
-                cd "$original_pwd"
+                # Single argument is always a commit message for current repo
+                process_version "$1"
             fi
             ;;
         2)
@@ -287,8 +281,7 @@ main() {
             echo "Usage:"
             echo "  gitversion                           - Commit current repo with 'simple changes'"
             echo "  gitversion \"message\"                 - Commit current repo with custom message"
-            echo "  gitversion <reponame>                - Commit remote repo with 'simple changes'"
-            echo "  gitversion <reponame> \"message\"      - Commit remote repo with custom message"
+            echo "  gitversion reponame \"message\"        - Commit remote repo with custom message"
             echo "  gitversion test \"message\"            - Test mode: show what would happen"
             echo ""
             echo "Version prefixes (case-insensitive):"
