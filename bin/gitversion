@@ -46,7 +46,15 @@ increment_version() {
 # Determine increment type from commit message
 get_increment_type() {
     local message=$1
-    local prefix=$(echo "$message" | cut -d: -f1 | tr '[:upper:]' '[:lower:]' | xargs)
+    local prefix
+    
+    # Check for colon format first (MAJOR: message)
+    if [[ "$message" == *":"* ]]; then
+        prefix=$(echo "$message" | cut -d: -f1 | tr '[:upper:]' '[:lower:]' | xargs)
+    else
+        # Check for space format (MAJOR message)
+        prefix=$(echo "$message" | cut -d' ' -f1 | tr '[:upper:]' '[:lower:]' | xargs)
+    fi
     
     case "$prefix" in
         major|release|breaking)
@@ -159,8 +167,12 @@ process_version() {
     
     # Add all files and commit
     git add .
-    git commit -m "$commit_message"
-    echo "Committed with message: $commit_message"
+    if git commit -m "$commit_message"; then
+        echo "Committed with message: $commit_message"
+    else
+        echo "Error: Failed to commit"
+        exit 1
+    fi
     
     # Create tag if needed
     if [[ "$increment_type" != "none" ]]; then
@@ -201,6 +213,24 @@ find_repo() {
 # Main function
 main() {
     local original_pwd=$(pwd)
+    
+    # Handle test mode first
+    if [[ "$1" == "test" ]] && [[ -n "${2:-}" ]]; then
+        echo "=== TEST MODE ==="
+        local increment_type=$(get_increment_type "$2")
+        local current_version=$(read_version)
+        echo "Input message: '$2'"
+        echo "Detected increment type: '$increment_type'"
+        echo "Current version: '$current_version'"
+        if [[ "$increment_type" != "none" ]]; then
+            local new_version=$(increment_version "$current_version" "$increment_type")
+            echo "New version would be: '$new_version'"
+            echo "Final commit message would be: '$2 [$new_version]'"
+        else
+            echo "No version change would occur"
+        fi
+        exit 0
+    fi
     
     case $# in
         0)
@@ -243,11 +273,12 @@ main() {
             echo "  gitversion \"message\"                 - Commit current repo with custom message"
             echo "  gitversion <reponame>                - Commit remote repo with 'simple changes'"
             echo "  gitversion <reponame> \"message\"      - Commit remote repo with custom message"
+            echo "  gitversion test \"message\"            - Test mode: show what would happen"
             echo ""
             echo "Version prefixes (case-insensitive):"
-            echo "  major|release|breaking: <message>   - Bumps major version"
-            echo "  minor|feature|feat: <message>       - Bumps minor version"
-            echo "  patch|fix: <message>                - Bumps patch version"
+            echo "  major|release|breaking[: ]<message> - Bumps major version"
+            echo "  minor|feature|feat[: ]<message>     - Bumps minor version"
+            echo "  patch|fix[: ]<message>              - Bumps patch version"
             exit 1
             ;;
     esac
