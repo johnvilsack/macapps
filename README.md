@@ -1,7 +1,7 @@
 ## Quick Install
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/johnvilsack/macapps/HEAD/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/johnvilsack/macapps/refs/heads/main/install-local.sh | bash
 ```
 
 ## plistprefs

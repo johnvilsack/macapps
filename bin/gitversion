@@ -142,10 +142,34 @@ create_tag() {
     fi
 }
 
+# Find git repository root
+find_git_root() {
+    local current_dir=$(pwd)
+    
+    while [[ "$current_dir" != "/" ]]; do
+        if [[ -d "$current_dir/.git" ]]; then
+            echo "$current_dir"
+            return 0
+        fi
+        current_dir=$(dirname "$current_dir")
+    done
+    
+    return 1
+}
+
 # Process versioning for a commit message
 process_version() {
     local commit_message=$1
-    local repo_path=${2:-$(pwd)}
+    local repo_path=${2:-}
+    
+    # If no repo_path provided, find git root from current location
+    if [[ -z "$repo_path" ]]; then
+        repo_path=$(find_git_root)
+        if [[ $? -ne 0 ]]; then
+            echo "Error: Not in a git repository or subdirectory"
+            exit 1
+        fi
+    fi
     
     # Change to repo directory
     cd "$repo_path"

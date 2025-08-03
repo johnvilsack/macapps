@@ -1,5 +1,8 @@
 # Changelog
 
+## [0.1.0-3] - 2025-08-02
+### Modified gitversion to work with subfolders in repos
+
 ## [0.1.0-2] - 2025-08-02
 ### Added to README
 
