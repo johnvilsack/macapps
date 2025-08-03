@@ -53,7 +53,13 @@ matches_pattern() {
     # Expand variables in pattern
     pattern=$(expand_variables "$pattern")
     
-    # Handle different pattern types
+    # If pattern is absolute, compare directly with path
+    if [[ "$pattern" == /* ]]; then
+        [[ "$path" == "$pattern" ]] && return 0
+        return 1
+    fi
+    
+    # Pattern is relative - match against relative path
     case "$pattern" in
         */*)
             # Pattern contains slash - match full relative path
@@ -166,6 +172,7 @@ process_file() {
         echo "################## $rel_path END ####################"
         echo
     } >> "$OUTPUT_FILE"
+    clog INFO "Processed: $file"
 }
 
 # Function to process directory recursively
@@ -183,10 +190,12 @@ process_directory() {
     done < <(find "$dir" -name ".combosource" -not -path "$CONFIG_DIR/.combosource" -print0 2>/dev/null)
     
     # Process nested .combosource files first
-    for nested_source in "${nested_sources[@]}"; do
-        local nested_dir=$(dirname "$nested_source")
-        process_combosource_file "$nested_source" "$nested_dir"
-    done
+    if [[ ${#nested_sources[@]} -gt 0 ]]; then
+        for nested_source in "${nested_sources[@]}"; do
+            local nested_dir=$(dirname "$nested_source")
+            process_combosource_file "$nested_source" "$nested_dir"
+        done
+    fi
     
     # Process all files in directory
     find "$dir" -type f 2>/dev/null | while IFS= read -r file; do
@@ -211,15 +220,12 @@ process_combosource_file() {
             entry="$source_dir/$entry"
         fi
         
-        # Only process if outside root generation path or specifically included
-        if [[ "$entry" != "$PWD"/* ]] || check_combosource "$entry" "$source_file"; then
-            if [[ -f "$entry" ]]; then
-                process_file "$entry" "$source_dir"
-            elif [[ -d "$entry" ]]; then
-                process_directory "$entry" "$source_dir"
-            else
-                echo "Warning: '$entry' not found, skipping..." >&2
-            fi
+        if [[ -f "$entry" ]]; then
+            process_file "$entry" "$source_dir"
+        elif [[ -d "$entry" ]]; then
+            process_directory "$entry" "$source_dir"
+        else
+            echo "Warning: '$entry' not found, skipping..." >&2
         fi
     done < "$source_file"
 }
@@ -267,7 +273,7 @@ combo() {
         if [[ $REPLY =~ ^[Yy]$ ]]; then
             # Process current directory
             process_directory "$PWD"
-            echo "Combined output written to: $OUTPUT_FILE"
+            clog SUCCESS "Combined output written to: $OUTPUT_FILE"
         else
             echo "Create .combosource with: echo 'path/to/file/or/dir' > .combosource"
             echo "Or use: ccombo add 'path/to/file/or/dir'"
@@ -279,7 +285,7 @@ combo() {
     # Process root .combosource file
     process_combosource_file "$SOURCE_FILE" "$CONFIG_DIR"
     
-    echo "Combined output written to: $OUTPUT_FILE"
+    clog SUCCESS "Combined output written to: $OUTPUT_FILE"
 }
 
 # Export functions for use in shell
@@ -291,7 +297,7 @@ if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
     case "${1:-}" in
         add)
             shift
-            combo_add "$@"
+            combo_add "${1:-.}"
             ;;
         ignore)
             shift

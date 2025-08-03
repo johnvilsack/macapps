@@ -1,5 +1,8 @@
 # Changelog
 
+## [1.3.0] - 2025-08-03
+- FEATURE: Enhanced ccombo with advanced filtering and usability improvements
+
 ## [1.2.0] - 2025-08-03
 - FEATURE: Modified ccombo
 
