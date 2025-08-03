@@ -1,5 +1,8 @@
 # Changelog
 
+## [0.1.0-2] - 2025-08-02
+### Added to README
+
 ## [0.1.0-1] - 2025-08-02
 ### documentation
 

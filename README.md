@@ -12,6 +12,16 @@ curl -fsSL https://raw.githubusercontent.com/johnvilsack/macapps/HEAD/install.sh
 ## gitversion (0.1.0)
 auto versioning for repos
 
+Usage:
+  gitversion                           - Commit current repo with 'simple changes'
+  gitversion "message"                 - Commit current repo with custom message
+  gitversion reponame "message"        - Commit remote repo with custom message
+
+Version prefixes (case-insensitive):
+  major|release|breaking: <message>   - Bumps major version
+  minor|feature|feat: <message>       - Bumps minor version
+  patch|fix: <message>                - Bumps patch version
+
 ## clog
 Pretty printing for logging
 
