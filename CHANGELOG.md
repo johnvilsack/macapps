@@ -1,5 +1,8 @@
 # Changelog
 
+## [2.0.0] - 2025-08-02
+### MAJOR: Testing an upgrade
+
 ## [1.0.1] - 2025-08-02
 ### FIX: removed old gitversion tooling
 
