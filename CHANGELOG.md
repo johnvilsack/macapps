@@ -1,5 +1,8 @@
 # Changelog
 
+## [0.4.0] - 2025-08-02
+### Minor: Testing minors 3
+
 ## [0.3.0] - 2025-08-02
 ### Minor: Testing minors 2
 
