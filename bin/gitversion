@@ -17,7 +17,16 @@ read_version() {
 # Parse semantic version into components
 parse_version() {
     local version=$1
-    echo "$version" | sed -E 's/^v?([0-9]+)\.([0-9]+)\.([0-9]+)$/\1 \2 \3/'
+    # Handle both 1.2.3 and 1.2.3-4 formats
+    if [[ "$version" =~ ^v?([0-9]+)\.([0-9]+)\.([0-9]+)(-([0-9]+))?$ ]]; then
+        local major="${BASH_REMATCH[1]}"
+        local minor="${BASH_REMATCH[2]}"
+        local patch="${BASH_REMATCH[3]}"
+        local sub="${BASH_REMATCH[5]:-0}"
+        echo "$major $minor $patch $sub"
+    else
+        echo "0 0 0 0"
+    fi
 }
 
 # Increment version based on type
@@ -25,7 +34,7 @@ increment_version() {
     local current=$1
     local increment_type=$2
     
-    read -r major minor patch <<< "$(parse_version "$current")"
+    read -r major minor patch sub <<< "$(parse_version "$current")"
     
     case "$increment_type" in
         major)
@@ -36,6 +45,13 @@ increment_version() {
             ;;
         patch)
             echo "$major.$minor.$((patch + 1))"
+            ;;
+        sub)
+            if [[ "$sub" == "0" ]]; then
+                echo "$major.$minor.$patch-1"
+            else
+                echo "$major.$minor.$patch-$((sub + 1))"
+            fi
             ;;
         *)
             echo "$current"
@@ -67,7 +83,7 @@ get_increment_type() {
             echo "patch"
             ;;
         *)
-            echo "none"
+            echo "sub"
             ;;
     esac
 }
@@ -279,6 +295,7 @@ main() {
             echo "  major|release|breaking[: ]<message> - Bumps major version"
             echo "  minor|feature|feat[: ]<message>     - Bumps minor version"
             echo "  patch|fix[: ]<message>              - Bumps patch version"
+            echo "  (no prefix)                         - Bumps subversion (-1, -2, etc.)"
             exit 1
             ;;
     esac
