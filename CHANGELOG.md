@@ -1,5 +1,8 @@
 # Changelog
 
+## [1.0.0] - 2025-08-02
+### MAJOR: Launching gitversion app
+
 ## [0.1.0-3] - 2025-08-02
 ### Modified gitversion to work with subfolders in repos
 

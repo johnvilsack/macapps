@@ -207,7 +207,7 @@ process_version() {
     
     # Add all files and commit
     git add .
-    if git commit -m "$commit_message"; then
+    if git commit --allow-empty -m "$commit_message"; then
         echo "Committed with message: $commit_message"
     else
         echo "Error: Failed to commit"
