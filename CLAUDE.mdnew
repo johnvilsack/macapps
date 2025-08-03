@@ -3,14 +3,15 @@
 3. Generate a new file called NEWCLAUDE.md and generate a new CLAUDE.md file that you would use in the future to best prepare yourself to manage this repo. The goal of this repo is to create scripts that run as commands on MacOS (and potentially Linux) to augment user effeciency. The contents of that file will replace the existing contents here.
 4. Before beginning, I want you to prompt me with any suggestions you may have of what else to include to make this as meaningful as possible in the fewest amount of tokens needed.
 5. Below is the suggested workflow I have for you. Please let me know your thoughts, if I should make any changes,additions, or removals.
+6. Where I reference below the code inside gitversion, please modify the workflow to display the values you source, instead of forcing it to read the code every time.
 
 # Git workflow for feature development
 
 ## On each feature request:
-- Make a new branch: `feature/xxx-desc` off `main`
-- Use gitversion command with 
+- Make a new branch: `feature/xxx-desc` off `main` and switch to it.
 - Use the [conventional commits](https://www.conventionalcommits.org/en/v1.0.0/#specification) specification that is applied to the gitversion app in the bin/ folder.
-- Commit often: meaningful messages like `feat:`, `fix:`, `refactor:`  
+- Commit often: prepend messages based on the keywords (or in the case of subversion, lackthereof) identified in gitversion.  
+- 
 - Always `git push origin feature/xxx-desc`
 
 ## Keep branches up‑to‑date:

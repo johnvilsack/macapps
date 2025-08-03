@@ -1,5 +1,8 @@
 # Changelog
 
+## [1.1.0] - 2025-08-03
+- FEATURE: Added multiline message commits
+
 ## [1.0.0] - 2025-08-02
 ### RELEASE: gitversion launch
 

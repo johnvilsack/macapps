@@ -59,17 +59,31 @@ increment_version() {
     esac
 }
 
+# Process escape sequences in message
+process_escape_sequences() {
+    local message="$1"
+    # Process common escape sequences
+    printf '%b' "$message"
+}
+
+# Extract title line from message (first line before \n)
+get_title_line() {
+    local message="$1"
+    echo "$message" | head -n1
+}
+
 # Determine increment type from commit message
 get_increment_type() {
-    local message=$1
+    local message="$1"
+    local title_line=$(get_title_line "$message")
     local prefix
     
     # Check for colon format first (MAJOR: message)
-    if [[ "$message" == *":"* ]]; then
-        prefix=$(echo "$message" | cut -d: -f1 | tr '[:upper:]' '[:lower:]' | xargs)
+    if [[ "$title_line" == *":"* ]]; then
+        prefix=$(echo "$title_line" | cut -d: -f1 | tr '[:upper:]' '[:lower:]' | xargs)
     else
         # Check for space format (MAJOR message)
-        prefix=$(echo "$message" | cut -d' ' -f1 | tr '[:upper:]' '[:lower:]' | xargs)
+        prefix=$(echo "$title_line" | cut -d' ' -f1 | tr '[:upper:]' '[:lower:]' | xargs)
     fi
     
     case "$prefix" in
@@ -94,8 +108,9 @@ update_changelog() {
     local message=$2
     local date=$(date +%Y-%m-%d)
     
-    # Remove version suffix from message if present
-    local clean_message=$(echo "$message" | sed -E 's/ \[v?[0-9]+\.[0-9]+\.[0-9]+\]$//')
+    # Get title line and remove version suffix if present
+    local title_line=$(get_title_line "$message")
+    local clean_message=$(echo "$title_line" | sed -E 's/ \[v?[0-9]+\.[0-9]+\.[0-9]+\]$//')
     
     # Create changelog if it doesn't exist
     if [[ ! -f "$CHANGELOG_FILE" ]]; then
@@ -157,10 +172,33 @@ find_git_root() {
     return 1
 }
 
+# Open editor for commit message
+open_editor() {
+    local temp_file=$(mktemp)
+    local editor="${EDITOR:-nano}"
+    
+    # Open editor
+    "$editor" "$temp_file"
+    
+    # Read the content
+    if [[ -s "$temp_file" ]]; then
+        cat "$temp_file"
+        rm "$temp_file"
+        return 0
+    else
+        rm "$temp_file"
+        echo "Error: Empty commit message"
+        return 1
+    fi
+}
+
 # Process versioning for a commit message
 process_version() {
-    local commit_message=$1
+    local commit_message="$1"
     local repo_path=${2:-}
+    
+    # Process escape sequences in the message
+    commit_message=$(process_escape_sequences "$commit_message")
     
     # If no repo_path provided, find git root from current location
     if [[ -z "$repo_path" ]]; then
@@ -201,18 +239,33 @@ process_version() {
         update_changelog "$new_version" "$commit_message"
         echo "Updated $CHANGELOG_FILE"
         
-        # Append version to commit message
-        commit_message="${commit_message} [${new_version}]"
+        # Inject version into title line only
+        local title_line=$(get_title_line "$commit_message")
+        local body_lines=$(echo "$commit_message" | tail -n +2)
+        
+        if [[ -n "$body_lines" ]]; then
+            commit_message="${title_line} [${new_version}]\n${body_lines}"
+        else
+            commit_message="${title_line} [${new_version}]"
+        fi
     fi
+    
+    # Create temp file for multiline commit
+    local temp_commit_file=$(mktemp)
+    printf '%b' "$commit_message" > "$temp_commit_file"
     
     # Add all files and commit
     git add .
-    if git commit --allow-empty -m "$commit_message"; then
-        echo "Committed with message: $commit_message"
+    if git commit --allow-empty -F "$temp_commit_file"; then
+        local display_msg=$(get_title_line "$commit_message")
+        echo "Committed with message: $display_msg"
     else
         echo "Error: Failed to commit"
+        rm "$temp_commit_file"
         exit 1
     fi
+    
+    rm "$temp_commit_file"
     
     # Create tag if needed
     if [[ "$increment_type" != "none" ]]; then
@@ -257,15 +310,25 @@ main() {
     # Handle test mode first
     if [[ "$1" == "test" ]] && [[ -n "${2:-}" ]]; then
         echo "=== TEST MODE ==="
-        local increment_type=$(get_increment_type "$2")
+        local test_message=$(process_escape_sequences "$2")
+        local increment_type=$(get_increment_type "$test_message")
         local current_version=$(read_version)
         echo "Input message: '$2'"
+        echo "Processed message:"
+        printf '%b\n' "$test_message"
         echo "Detected increment type: '$increment_type'"
         echo "Current version: '$current_version'"
         if [[ "$increment_type" != "none" ]]; then
             local new_version=$(increment_version "$current_version" "$increment_type")
             echo "New version would be: '$new_version'"
-            echo "Final commit message would be: '$2 [$new_version]'"
+            echo "Final commit message would be:"
+            local title_line=$(get_title_line "$test_message")
+            local body_lines=$(echo "$test_message" | tail -n +2)
+            if [[ -n "$body_lines" ]]; then
+                printf '%b\n' "${title_line} [${new_version}]\\n${body_lines}"
+            else
+                printf '%b\n' "${title_line} [${new_version}]"
+            fi
         else
             echo "No version change would occur"
         fi
@@ -283,30 +346,57 @@ main() {
                 echo "Usage:"
                 echo "  gitversion                           - Commit current repo with 'simple changes'"
                 echo "  gitversion \"message\"                 - Commit current repo with custom message"
+                echo "  gitversion -m | --multiline          - Open editor for multiline message"
                 echo "  gitversion reponame \"message\"        - Commit remote repo with custom message"
+                echo ""
+                echo "Escape sequences supported: \\n (newline), \\t (tab), \\r (carriage return)"
                 echo ""
                 echo "Version prefixes (case-insensitive):"
                 echo "  major|release|breaking: <message>   - Bumps major version"
                 echo "  minor|feature|feat: <message>       - Bumps minor version"
                 echo "  patch|fix: <message>                - Bumps patch version"
                 exit 0
+            elif [[ "$1" == "-m" ]] || [[ "$1" == "--multiline" ]]; then
+                # Open editor for multiline message
+                local editor_message
+                if editor_message=$(open_editor); then
+                    process_version "$editor_message"
+                else
+                    exit 1
+                fi
             else
                 # Single argument is always a commit message for current repo
                 process_version "$1"
             fi
             ;;
         2)
-            # gitversion <reponame> "Commit message here" - commit in remote repo
-            local repo_path=$(find_repo "$1")
-            process_version "$2" "$repo_path"
-            cd "$original_pwd"
+            if [[ "$1" == "-m" ]] || [[ "$1" == "--multiline" ]]; then
+                # gitversion -m <reponame> - open editor for remote repo
+                local repo_path=$(find_repo "$2")
+                local editor_message
+                if editor_message=$(open_editor); then
+                    process_version "$editor_message" "$repo_path"
+                    cd "$original_pwd"
+                else
+                    exit 1
+                fi
+            else
+                # gitversion <reponame> "Commit message here" - commit in remote repo
+                local repo_path=$(find_repo "$1")
+                process_version "$2" "$repo_path"
+                cd "$original_pwd"
+            fi
             ;;
         *)
             echo "Usage:"
             echo "  gitversion                           - Commit current repo with 'simple changes'"
             echo "  gitversion \"message\"                 - Commit current repo with custom message"
+            echo "  gitversion -m | --multiline          - Open editor for multiline message"
             echo "  gitversion reponame \"message\"        - Commit remote repo with custom message"
+            echo "  gitversion -m reponame               - Open editor for remote repo"
             echo "  gitversion test \"message\"            - Test mode: show what would happen"
+            echo ""
+            echo "Escape sequences supported: \\n (newline), \\t (tab), \\r (carriage return)"
             echo ""
             echo "Version prefixes (case-insensitive):"
             echo "  major|release|breaking[: ]<message> - Bumps major version"
