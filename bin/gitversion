@@ -108,7 +108,7 @@ update_changelog() {
     
     # Add new version header
     echo "## [$version] - $date" > "$temp_file"
-    echo "### $clean_message" >> "$temp_file"
+    echo "- $clean_message" >> "$temp_file"
     echo "" >> "$temp_file"
     
     # Append existing changelog content (skip the header)
