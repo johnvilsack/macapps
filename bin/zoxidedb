@@ -30,67 +30,59 @@ strip_quotes(){
 # ─── Mode: tocsv ────────────────────────────────────────────────────────────────
 
 paths_to_csv(){
-  local keep_uri="$1"; local input="$2"; local output="$3"
+  local keep_uri="$1"; shift
+  local input="$1" output="$2"
   : > "$output"
   while IFS=$'\t' read -r raw_score raw_path; do
     [[ -z "$raw_score" ]] && continue
 
-    # Trim whitespace
+    # Trim score and path
     score="${raw_score#"${raw_score%%[![:space:]]*}"}"
     score="${score%"${score##*[![:space:]]}"}"
     path="${raw_path#"${raw_path%%[![:space:]]*}"}"
     path="${path%"${path##*[![:space:]]}"}"
-    # Remove leading slash for splitting
     path="${path#/}"
 
     # Split into segments
     IFS='/' read -r -a parts <<< "$path"
 
-    # Build CSV row
-    row="$(quote_csv "$score")"
-    [[ "$keep_uri" == yes ]] && row+=",$(quote_csv "/$path")"
+    quote_csv "$score" >>"$output"
+    if [[ "$keep_uri" == yes ]]; then
+      printf ',' >>"$output"
+      quote_csv "/$path" >>"$output"
+    fi
     for seg in "${parts[@]}"; do
-      row+=",$(quote_csv "$seg")"
+      printf ',' >>"$output"
+      quote_csv "$seg" >>"$output"
     done
-
-    printf '%s\n' "$row" >> "$output"
-  done < "$input"
+    printf '\n' >>"$output"
+  done <"$input"
 }
 
 # ─── Mode: totext ───────────────────────────────────────────────────────────────
 
 csv_to_paths(){
-  local input="$1"; local output="$2"
-  : > "$output"
-  while IFS= read -r line || [[ -n "$line" ]]; do
-    [[ -z "$line" ]] && continue
-
-    # Split on commas (does not support commas inside fields in tests)
-    IFS=',' read -r -a fields <<< "$line"
-    for i in "${!fields[@]}"; do
-      fields[$i]="$(strip_quotes "${fields[$i]}")"
-    done
-
-    local score="${fields[0]}"
-    local start=1; local uri=""
-
-    # If second field starts with / and there are >2 fields, treat as URI
-    if [[ "${#fields[@]}" -gt 2 && "${fields[1]}" == /* ]]; then
-      uri="${fields[1]}"
-      start=2
-    fi
-
-    local path=""
-    for ((i=start; i<${#fields[@]}; i++)); do
-      [[ -z "${fields[i]}" ]] && continue
-      path+="/${fields[i]}"
-    done
-    [[ -z "$path" ]] && path="/"
-
-    # Force one decimal
-    printf '%.1f\t%s\n' "$score" "${uri:-$path}" >> "$output"
-  done < "$input"
+  awk -F',' '
+    function strip(s){ gsub(/^"|"$/, "", s); gsub(/""/,"\"",s); return s }
+    {
+      s = strip($1)+0
+      # detect URI
+      if (strip($2) ~ /^\// && NF>2) {
+        uri = strip($2); start=3
+      } else {
+        uri=""; start=2
+      }
+      path=""
+      for(i=start;i<=NF;i++){
+        f=strip($i)
+        if(f!="") path=path"/"f
+      }
+      if(path=="") path="/"
+      printf("%.1f\t%s\n", s, uri?uri:path)
+    }
+  ' "$1" > "$2"
 }
+
 
 # ─── Mode: sort ─────────────────────────────────────────────────────────────────
 

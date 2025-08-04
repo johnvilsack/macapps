@@ -1,5 +1,8 @@
 # Changelog
 
+## [1.6.0] - 2025-08-04
+- FEATURE: zoxidedb released
+
 ## [1.5.0] - 2025-08-04
 - FEAT: zoxide sort working
 
