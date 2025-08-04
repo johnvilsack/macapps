@@ -1,24 +1,101 @@
-declare -A _TIMER_START
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Directory to store timer files
+TIMER_DIR="${TMPDIR:-/tmp}/bash_timers"
+mkdir -p "$TIMER_DIR"
+
+# Cleanup on exit - only remove empty directories
+cleanup() {
+  if [[ -d "$TIMER_DIR" ]] && [[ -z "$(ls -A "$TIMER_DIR" 2>/dev/null)" ]]; then
+    rmdir "$TIMER_DIR" 2>/dev/null || true
+  fi
+}
+trap cleanup EXIT
+
+# Converts nanoseconds to variable-precision dhms output
+convert_nsec_to_dhms(){
+  local ns="$1"
+  local total_secs=$((ns / 1000000000))
+  local ms=$(((ns / 1000000) % 1000))
+
+  local d=$((total_secs / 86400))
+  local h=$((total_secs / 3600 % 24))
+  local m=$((total_secs / 60 % 60))
+  local s=$((total_secs % 60))
+
+  local output=""
+  (( d > 0 )) && output+="${d}d "
+  (( h > 0 )) && output+="${h}h "
+  (( m > 0 )) && output+="${m}m "
+
+  if (( total_secs >= 60 )); then
+    output+="${s}s"
+  elif (( total_secs >= 10 )); then
+    output+=$(printf '%d.%01ds' "$s" $((ms / 100)))
+  else
+    output+=$(printf '%d.%03ds' "$s" "$ms")
+  fi
+
+  echo "$output"
+}
 
 timer(){
-  local cmd=$1; local name=${2:-default}
+  local cmd name="default"
+  local raw=false dhms=false
+  cmd=$1; shift || true
+
+  while (( $# )); do
+    case $1 in
+      -r|--raw) raw=true ;;
+      -d|--dhms) dhms=true ;;
+      *) name=$1 ;;
+    esac
+    shift
+  done
+
+  local timer_file="$TIMER_DIR/$name"
+
   case "$cmd" in
     start)
-      _TIMER_START[$name]=$(date +%s%N) ;;
+      date +%s%N > "$timer_file"
+      ;;
     lap|end)
-      local st=${_TIMER_START[$name]}
-      if [[ -z $st ]]; then
+      if [[ ! -f "$timer_file" ]]; then
         echo "timer \"$name\" not started" >&2
         return 1
       fi
-      local now=$(date +%s%N)
-      local delta=$((now - st))
-      printf '%s elapsed: %d.%03d sec\n' "$name" $((delta/1000000000)) $(( (delta/1000000)%1000 ))
-      [[ "$cmd" == end ]] && unset _TIMER_START[$name]
+      
+      local start_time
+      start_time=$(<"$timer_file")
+      local now
+      now=$(date +%s%N)
+      local delta=$((now - start_time))
+      local output
+
+      if $dhms; then
+        output=$(convert_nsec_to_dhms "$delta")
+      else
+        local secs=$((delta / 1000000000))
+        local ms=$(((delta / 1000000) % 1000))
+        output=$(printf '%d.%03d' "$secs" "$ms")
+      fi
+
+      if $raw; then
+        echo "$output"
+      elif $dhms; then
+        echo "$name elapsed: $output"
+      else
+        echo "$name elapsed: $output sec"
+      fi
+
+      [[ "$cmd" == end ]] && rm -f "$timer_file"
       ;;
     *)
-      echo "Usage: timer {start|lap|end} [name]" >&2
+      echo "Usage: timer {start|lap|end} [name] [-r|--raw] [-d|--dhms]" >&2
       return 2
       ;;
   esac
 }
+
+timer "$@"
