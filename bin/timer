@@ -1,0 +1,24 @@
+declare -A _TIMER_START
+
+timer(){
+  local cmd=$1; local name=${2:-default}
+  case "$cmd" in
+    start)
+      _TIMER_START[$name]=$(date +%s%N) ;;
+    lap|end)
+      local st=${_TIMER_START[$name]}
+      if [[ -z $st ]]; then
+        echo "timer \"$name\" not started" >&2
+        return 1
+      fi
+      local now=$(date +%s%N)
+      local delta=$((now - st))
+      printf '%s elapsed: %d.%03d sec\n' "$name" $((delta/1000000000)) $(( (delta/1000000)%1000 ))
+      [[ "$cmd" == end ]] && unset _TIMER_START[$name]
+      ;;
+    *)
+      echo "Usage: timer {start|lap|end} [name]" >&2
+      return 2
+      ;;
+  esac
+}

@@ -1,5 +1,8 @@
 # Changelog
 
+## [1.6.0-1] - 2025-08-04
+- Timer first iteration
+
 ## [1.6.0] - 2025-08-04
 - FEATURE: zoxidedb released
 
