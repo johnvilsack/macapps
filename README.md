@@ -4,7 +4,7 @@ Collection of shell scripts for macOS efficiency. Commands install to `$HOME/.lo
 
 ## Installation
 ```bash
-curl -fsSL https://raw.githubusercontent.com/johnvilsack/macapps/refs/heads/main/install-local.sh | bash
+curl -fsSL https://raw.githubusercontent.com/johnvilsack/macapps/refs/heads/main/install.sh | bash
 ```
 
 ## Applications
