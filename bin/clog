@@ -285,7 +285,7 @@ clog() {
 }
 
 function hrline() {
-    echo "$(printf '%*s' "$(tput cols)" '' | tr ' ' '-')"
+    echo "$(printf '\e[1;38;5;240m%*s\e[0m' "$(tput cols)" '' | tr ' ' '-')"
 }
 
 if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then

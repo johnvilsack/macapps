@@ -1,5 +1,8 @@
 # Changelog
 
+## [1.4.1-1] - 2025-08-04
+- Colored the line
+
 ## [1.4.1] - 2025-08-04
 - FIX: Added clog LINE functionality
 
