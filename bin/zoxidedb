@@ -1,106 +1,148 @@
 #!/usr/bin/env bash
-
 set -euo pipefail
 
-usage() {
-  echo "Usage:"
-  echo "  $0 tocsv     input.txt      output.csv"
-  echo "  $0 totext    input.csv      output.txt"
-  echo "  $0 getzoxide output.txt     [optional keyword filter]"
+usage(){
+  cat<<EOF
+Usage:
+  $0 tocsv  [-k|--keep-uri] input.txt     output.csv
+  $0 totext        input.csv               output.txt
+  $0 sort         input.txt                output.txt
+  $0 getzoxide     output.txt   [keywords...]
+EOF
   exit 1
 }
 
-paths_to_csv() {
+# Quote a single CSV field, escaping internal quotes as ""
+quote_csv() {
+  local s="$1"
+  s="${s//\"/\"\"}"
+  printf '"%s"' "$s"
+}
+
+paths_to_csv(){
+  local keep_uri="$1"; shift
   local input="$1" output="$2"
   : > "$output"
   while IFS=$'\t' read -r raw_score raw_path; do
     [[ -z "$raw_score" ]] && continue
 
-    # trim spaces around score
+    # Trim score and path
     score="${raw_score#"${raw_score%%[![:space:]]*}"}"
     score="${score%"${score##*[![:space:]]}"}"
-
-    # normalize path, trim leading/trailing whitespace
     path="${raw_path#"${raw_path%%[![:space:]]*}"}"
     path="${path%"${path##*[![:space:]]}"}"
-
-    # strip leading slash so the first part isn’t empty
     path="${path#/}"
 
-    # split by '/', preserving blank segments if any
+    # Split into segments
     IFS='/' read -r -a parts <<< "$path"
 
-    # output score as first field, then each segment as quoted
-    printf '"%s"' "${score//\"/\"\"}" >> "$output"
+    quote_csv "$score" >>"$output"
+    if [[ "$keep_uri" == yes ]]; then
+      printf ',' >>"$output"
+      quote_csv "/$path" >>"$output"
+    fi
     for seg in "${parts[@]}"; do
-      printf ',"%s"' "${seg//\"/\"\"}" >> "$output"
+      printf ',' >>"$output"
+      quote_csv "$seg" >>"$output"
     done
-    printf '\n' >> "$output"
-  done < "$input"
+    printf '\n' >>"$output"
+  done <"$input"
 }
 
-
-csv_to_paths() {
-  local input="$1"
-  local output="$2"
-  awk -F',' '
-    function strip(s) {
-      gsub(/^"|"$/, "", s)
-      return s
-    }
+csv_to_paths(){
+  local input="$1" output="$2"
+  awk -v FPAT='\"([^\"]|\"\")*\"|[^,]+' '
+    function strip(s){ gsub(/^"|"$/, "", s); gsub(/""/,"\"",s); return s }
     {
-      raw = strip($1)
-      # Coerce to number; force one decimal
-      score = raw + 0
-      path = ""
-      for (i = 2; i <= NF; i++) {
-        seg = strip($i)
-        if (seg != "") {
-          path = path "/" seg
-        }
-      }
-      # Print with one decimal and tab separator
-      printf("%.1f\t%s\n", score, path)
+      # Unquote
+      for(i=1;i<=NF;i++) $i = strip($i)
+      score = $1+0
+      # Detect kept-URI
+      if ($2 ~ /^\// && NF > 2) { uri=$2; start=3 }
+      else { uri="";  start=2 }
+      path=""
+      for(i=start;i<=NF;i++) if ($i!="") path=path"/"$i
+      if(path=="") path="/"
+      printf("%.1f\t%s\n", score, (uri!="" ? uri : path))
     }
-  ' "$input" > "$output"
+  ' "$input" >"$output"
 }
 
+# ─── NEW: hierarchical sort ────────────────────────────────────────────────────
+sort_hier(){
+  local input="$1" output="$2"
+  declare -A root_score root_line child_counts child_list
 
-get_zoxide() {
-  local output="$1"
-  shift
-  zoxide query --list --all --score "$@" | while IFS= read -r line; do
+  # Read and group
+  while IFS=$'\t' read -r score path; do
+    [[ -z "$score" ]] && continue
+    # Normalize
+    score=$(awk -v s="$score" 'BEGIN{printf "%g", s}')
+    # Trim leading slash
+    local t="${path#/}"
+    IFS='/' read -r -a segs <<< "$t"
+    local root=${segs[0]}
+    local depth=${#segs[@]}
+
+    if (( depth == 1 )); then
+      root_score["$root"]=$score
+      root_line["$root"]="$score"$'\t'"$path"
+    else
+      ((child_counts["$root"]++))
+      idx=${child_counts["$root"]}
+      child_list["$root,$idx"]="$score"$'\t'"$path"
+    fi
+  done <"$input"
+
+  # Sort roots by descending score
+  mapfile -t roots < <(
+    for r in "${!root_score[@]}"; do
+      printf '%s\t%s\n' "${root_score[$r]}" "$r"
+    done | sort -t $'\t' -k1,1nr | cut -f2
+  )
+
+  : >"$output"
+  for r in "${roots[@]}"; do
+    # Print root
+    printf '%s\n' "${root_line[$r]}" >>"$output"
+    # Print children sorted by ascending score
+    local cnt=${child_counts[$r]:-0}
+    if (( cnt > 0 )); then
+      mapfile -t children < <(
+        for ((i=1;i<=cnt;i++)); do
+          echo "${child_list[$r,$i]}"
+        done
+      )
+      mapfile -t sorted < <(printf '%s\n' "${children[@]}" | sort -t $'\t' -k1,1n)
+      for line in "${sorted[@]}"; do
+        printf '%s\n' "$line" >>"$output"
+      done
+    fi
+  done
+}
+# ────────────────────────────────────────────────────────────────────────────────
+
+getzoxide(){
+  local out="$1"; shift
+  zoxide query --list --all --score "$@" | \
+  while IFS= read -r line; do
     [[ -z "$line" ]] && continue
-    # The first whitespace token is score, rest is path
     IFS=$' \t' read -r scr rest <<< "$line"
-    # Now clean up path (in case of leading spaces)
-    path="${rest#"${rest%%[![:space:]]*}"}"
-    echo -e "$scr\t$path"
-  done > "$output"
+    rest="${rest#"${rest%%[![:space:]]*}"}"
+    echo -e "$scr\t$rest"
+  done >"$out"
 }
 
-main() {
-  if [[ $# -lt 2 ]]; then usage; fi
-
-  local mode="$1"
-  shift
-
-  case "$mode" in
-    tocsv)
-      [[ $# -eq 2 ]] || usage
-      paths_to_csv "$1" "$2"
-      ;;
-    totext)
-      [[ $# -eq 2 ]] || usage
-      csv_to_paths "$1" "$2"
-      ;;
-    getzoxide)
-      get_zoxide "$1" "${2:-}"
-      ;;
-    *)
-      usage
-      ;;
-  esac
-}
-
-main "$@"
+case "${1:-}" in
+  tocsv)
+    if [[ "$2" == "--keep-uri" || "$2" == "-k" ]]; then
+      paths_to_csv yes "$3" "$4"
+    else
+      paths_to_csv no  "$2" "$3"
+    fi
+    ;;
+  totext) csv_to_paths "$2" "$3" ;;
+  sort)   sort_hier    "$2" "$3" ;;
+  getzoxide) getzoxide "$2" "${@:3}" ;;
+  *) usage ;;
+esac

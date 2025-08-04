@@ -1,5 +1,8 @@
 # Changelog
 
+## [1.4.2] - 2025-08-04
+- FIX: zoxidedb working great
+
 ## [1.4.1-1] - 2025-08-04
 - Colored the line
 
