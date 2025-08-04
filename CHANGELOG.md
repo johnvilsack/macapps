@@ -1,5 +1,8 @@
 # Changelog
 
+## [1.5.0] - 2025-08-04
+- FEAT: zoxide sort working
+
 ## [1.4.2] - 2025-08-04
 - FIX: zoxidedb working great
 
