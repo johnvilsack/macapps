@@ -33,6 +33,8 @@ convert_nsec_to_dhms(){
     output+="${s}s"
   elif (( total_secs >= 10 )); then
     output+=$(printf '%d.%01ds' "$s" $((ms / 100)))
+  elif (( total_secs >= 3 )); then
+    output+=$(printf '%d.%02ds' "$s" $((ms / 100)))
   else
     output+=$(printf '%d.%03ds' "$s" "$ms")
   fi
@@ -58,6 +60,7 @@ timer(){
 
   case "$cmd" in
     start)
+      # Store just the start time
       date +%s%N > "$timer_file"
       ;;
     lap|end)
@@ -66,19 +69,32 @@ timer(){
         return 1
       fi
       
-      local start_time
-      start_time=$(<"$timer_file")
+      local start_time last_lap_time
+      {
+        read -r start_time
+        read -r last_lap_time 2>/dev/null || last_lap_time="$start_time"
+      } < "$timer_file"
+      
       local now
       now=$(date +%s%N)
-      local delta=$((now - start_time))
+      
+      local time_to_use
+      if [[ "$cmd" == "end" ]]; then
+        # For end: total time from start
+        time_to_use=$((now - start_time))
+      else
+        # For lap: interval since last lap
+        time_to_use=$((now - last_lap_time))
+      fi
+      
       local output
 
       if $seconds; then
-        local secs=$((delta / 1000000000))
-        local ms=$(((delta / 1000000) % 1000))
+        local secs=$((time_to_use / 1000000000))
+        local ms=$(((time_to_use / 1000000) % 1000))
         output=$(printf '%d.%03d' "$secs" "$ms")
       else
-        output=$(convert_nsec_to_dhms "$delta")
+        output=$(convert_nsec_to_dhms "$time_to_use")
       fi
 
       if $raw; then
@@ -89,7 +105,12 @@ timer(){
         echo "$name: $output"
       fi
 
-      [[ "$cmd" == end ]] && rm -f "$timer_file"
+      if [[ "$cmd" == end ]]; then
+        rm -f "$timer_file"
+      else
+        # Update file with start time and current time as last lap
+        printf '%s\n%s\n' "$start_time" "$now" > "$timer_file"
+      fi
       ;;
     *)
       echo "Usage: timer {start|lap|end} [name] [-r|--raw] [-s|--seconds]" >&2
