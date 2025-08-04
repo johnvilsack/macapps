@@ -1,5 +1,8 @@
 # Changelog
 
+## [1.4.1] - 2025-08-04
+- FIX: Added clog LINE functionality
+
 ## [1.4.0] - 2025-08-04
 - MINOR: Added zoxidedb
 

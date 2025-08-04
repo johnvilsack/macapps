@@ -284,7 +284,17 @@ clog() {
     fi
 }
 
+function hrline() {
+    echo "$(printf '%*s' "$(tput cols)" '' | tr ' ' '-')"
+}
+
 if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+    # Special case: if you call “clog LINE” (or “clog line”), just print the hrline
+    if [[ $# -eq 1 && "${1^^}" == "LINE" ]]; then
+        hrline
+        exit 0
+    fi
+
     # Parse command line arguments
     while [[ $# -gt 0 ]]; do
         case $1 in
