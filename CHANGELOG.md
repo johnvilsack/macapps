@@ -1,5 +1,8 @@
 # Changelog
 
+## [1.4.0] - 2025-08-04
+- MINOR: Added zoxidedb
+
 ## [1.3.1] - 2025-08-03
 - FIX: installer disappeared?
 

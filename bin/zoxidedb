@@ -1,0 +1,106 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+usage() {
+  echo "Usage:"
+  echo "  $0 tocsv     input.txt      output.csv"
+  echo "  $0 totext    input.csv      output.txt"
+  echo "  $0 getzoxide output.txt     [optional keyword filter]"
+  exit 1
+}
+
+paths_to_csv() {
+  local input="$1" output="$2"
+  : > "$output"
+  while IFS=$'\t' read -r raw_score raw_path; do
+    [[ -z "$raw_score" ]] && continue
+
+    # trim spaces around score
+    score="${raw_score#"${raw_score%%[![:space:]]*}"}"
+    score="${score%"${score##*[![:space:]]}"}"
+
+    # normalize path, trim leading/trailing whitespace
+    path="${raw_path#"${raw_path%%[![:space:]]*}"}"
+    path="${path%"${path##*[![:space:]]}"}"
+
+    # strip leading slash so the first part isn’t empty
+    path="${path#/}"
+
+    # split by '/', preserving blank segments if any
+    IFS='/' read -r -a parts <<< "$path"
+
+    # output score as first field, then each segment as quoted
+    printf '"%s"' "${score//\"/\"\"}" >> "$output"
+    for seg in "${parts[@]}"; do
+      printf ',"%s"' "${seg//\"/\"\"}" >> "$output"
+    done
+    printf '\n' >> "$output"
+  done < "$input"
+}
+
+
+csv_to_paths() {
+  local input="$1"
+  local output="$2"
+  awk -F',' '
+    function strip(s) {
+      gsub(/^"|"$/, "", s)
+      return s
+    }
+    {
+      raw = strip($1)
+      # Coerce to number; force one decimal
+      score = raw + 0
+      path = ""
+      for (i = 2; i <= NF; i++) {
+        seg = strip($i)
+        if (seg != "") {
+          path = path "/" seg
+        }
+      }
+      # Print with one decimal and tab separator
+      printf("%.1f\t%s\n", score, path)
+    }
+  ' "$input" > "$output"
+}
+
+
+get_zoxide() {
+  local output="$1"
+  shift
+  zoxide query --list --all --score "$@" | while IFS= read -r line; do
+    [[ -z "$line" ]] && continue
+    # The first whitespace token is score, rest is path
+    IFS=$' \t' read -r scr rest <<< "$line"
+    # Now clean up path (in case of leading spaces)
+    path="${rest#"${rest%%[![:space:]]*}"}"
+    echo -e "$scr\t$path"
+  done > "$output"
+}
+
+main() {
+  if [[ $# -lt 2 ]]; then usage; fi
+
+  local mode="$1"
+  shift
+
+  case "$mode" in
+    tocsv)
+      [[ $# -eq 2 ]] || usage
+      paths_to_csv "$1" "$2"
+      ;;
+    totext)
+      [[ $# -eq 2 ]] || usage
+      csv_to_paths "$1" "$2"
+      ;;
+    getzoxide)
+      get_zoxide "$1" "${2:-}"
+      ;;
+    *)
+      usage
+      ;;
+  esac
+}
+
+main "$@"
