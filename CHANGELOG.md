@@ -1,5 +1,8 @@
 # Changelog
 
+## [1.8.0] - 2025-08-04
+- FEATURE: timer release
+
 ## [1.7.0] - 2025-08-04
 - FEATURE: timer release
 

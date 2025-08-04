@@ -42,13 +42,13 @@ convert_nsec_to_dhms(){
 
 timer(){
   local cmd name="default"
-  local raw=false dhms=false
+  local raw=false seconds=false
   cmd=$1; shift || true
 
   while (( $# )); do
     case $1 in
       -r|--raw) raw=true ;;
-      -d|--dhms) dhms=true ;;
+      -s|--seconds) seconds=true ;;
       *) name=$1 ;;
     esac
     shift
@@ -73,26 +73,26 @@ timer(){
       local delta=$((now - start_time))
       local output
 
-      if $dhms; then
-        output=$(convert_nsec_to_dhms "$delta")
-      else
+      if $seconds; then
         local secs=$((delta / 1000000000))
         local ms=$(((delta / 1000000) % 1000))
         output=$(printf '%d.%03d' "$secs" "$ms")
+      else
+        output=$(convert_nsec_to_dhms "$delta")
       fi
 
       if $raw; then
         echo "$output"
-      elif $dhms; then
-        echo "$name elapsed: $output"
+      elif [[ "$name" == "default" ]]; then
+        echo "$output"
       else
-        echo "$name elapsed: $output sec"
+        echo "$name: $output"
       fi
 
       [[ "$cmd" == end ]] && rm -f "$timer_file"
       ;;
     *)
-      echo "Usage: timer {start|lap|end} [name] [-r|--raw] [-d|--dhms]" >&2
+      echo "Usage: timer {start|lap|end} [name] [-r|--raw] [-s|--seconds]" >&2
       return 2
       ;;
   esac
