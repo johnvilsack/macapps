@@ -1,5 +1,8 @@
 # Changelog
 
+## [1.9.0] - 2025-08-04
+- FEATURE: zoxidedb added z importer
+
 ## [1.8.1] - 2025-08-04
 - FIX: Timer formatting
 

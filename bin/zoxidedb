@@ -7,6 +7,7 @@ Usage:
   $0 tocsv   [-k|--keep-uri] input.txt   output.csv
   $0 totext       input.csv             output.txt
   $0 sort         input.txt             output.txt
+  $0 toz          input.txt             output.z
   $0 getzoxide    output.txt [keywords...]
 EOF
   exit 1
@@ -98,6 +99,23 @@ sort_hier(){
   > "$output"
 }
 
+# ─── Mode: toz ──────────────────────────────────────────────────────────────────
+
+toz(){
+  local input="$1" output="$2"
+  : > "$output"
+  while IFS=$'\t' read -r score path; do
+    [[ -z "$score" ]] && continue
+    # Fallback if no tab
+    if [[ -z "$path" ]]; then
+      read -r score path <<< "$score"
+    fi
+    # Convert score to z format (multiply by 4) and add timestamp placeholder
+    local z_score=$((${score%.*} * 4))
+    printf '%s|%s|1\n' "$path" "$z_score" >> "$output"
+  done < "$input"
+}
+
 # ─── Mode: getzoxide ────────────────────────────────────────────────────────────
 
 getzoxide(){
@@ -133,6 +151,9 @@ case "${1:-}" in
     ;;
   sort)
     sort_hier "$2" "$3"
+    ;;
+  toz)
+    toz "$2" "$3"
     ;;
   getzoxide)
     getzoxide "$2" "${@:3}"
