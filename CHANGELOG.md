@@ -1,5 +1,8 @@
 # Changelog
 
+## [1.11.0] - 2025-08-05
+- MINOR: Updated zoxide-datatools to include sort on export
+
 ## [1.10.1] - 2025-08-04
 - FIX: zoxidedb backups now no longer overwrite
 
