@@ -1,5 +1,8 @@
 # Changelog
 
+## [1.10.1] - 2025-08-04
+- FIX: zoxidedb backups now no longer overwrite
+
 ## [1.10.0] - 2025-08-04
 - FEATURE: zoxidedb added backup and restore
 

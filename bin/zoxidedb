@@ -130,6 +130,14 @@ backup(){
     exit 1
   fi
   
+  # If backup already exists, preserve it with datetime suffix
+  if [[ -f "$backup_file" ]]; then
+    local datetime=$(date +"%Y%m%d_%H%M%S")
+    local dated_backup="$zo_data_dir/db.zo.backup.$datetime"
+    mv "$backup_file" "$dated_backup"
+    echo "Existing backup moved to $dated_backup"
+  fi
+  
   cp "$db_file" "$backup_file"
   echo "Backed up $db_file to $backup_file"
 }
