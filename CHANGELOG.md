@@ -1,5 +1,8 @@
 # Changelog
 
+## [1.10.0] - 2025-08-04
+- FEATURE: zoxidedb added backup and restore
+
 ## [1.9.0] - 2025-08-04
 - FEATURE: zoxidedb added z importer
 

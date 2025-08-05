@@ -8,6 +8,8 @@ Usage:
   $0 totext       input.csv             output.txt
   $0 sort         input.txt             output.txt
   $0 toz          input.txt             output.z
+  $0 backup
+  $0 restore
   $0 getzoxide    output.txt [keywords...]
 EOF
   exit 1
@@ -116,6 +118,38 @@ toz(){
   done < "$input"
 }
 
+# ─── Mode: backup ───────────────────────────────────────────────────────────────
+
+backup(){
+  local zo_data_dir="${_ZO_DATA_DIR:-$HOME/.local/share/zoxide}"
+  local db_file="$zo_data_dir/db.zo"
+  local backup_file="$zo_data_dir/db.zo.backup"
+  
+  if [[ ! -f "$db_file" ]]; then
+    echo "Error: zoxide database not found at $db_file" >&2
+    exit 1
+  fi
+  
+  cp "$db_file" "$backup_file"
+  echo "Backed up $db_file to $backup_file"
+}
+
+# ─── Mode: restore ──────────────────────────────────────────────────────────────
+
+restore(){
+  local zo_data_dir="${_ZO_DATA_DIR:-$HOME/.local/share/zoxide}"
+  local db_file="$zo_data_dir/db.zo"
+  local backup_file="$zo_data_dir/db.zo.backup"
+  
+  if [[ ! -f "$backup_file" ]]; then
+    echo "Error: backup file not found at $backup_file" >&2
+    exit 1
+  fi
+  
+  cp "$backup_file" "$db_file"
+  echo "Restored $backup_file to $db_file"
+}
+
 # ─── Mode: getzoxide ────────────────────────────────────────────────────────────
 
 getzoxide(){
@@ -154,6 +188,12 @@ case "${1:-}" in
     ;;
   toz)
     toz "$2" "$3"
+    ;;
+  backup)
+    backup
+    ;;
+  restore)
+    restore
     ;;
   getzoxide)
     getzoxide "$2" "${@:3}"
