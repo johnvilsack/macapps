@@ -160,6 +160,11 @@ process_file() {
     local base_dir="${2:-$PWD}"
     local rel_path="${file#$base_dir/}"
     
+    # Skip if this is the output file to prevent recursion
+    local output_realpath=$(realpath "$OUTPUT_FILE" 2>/dev/null || echo "$OUTPUT_FILE")
+    local file_realpath=$(realpath "$file" 2>/dev/null || echo "$file")
+    [[ "$file_realpath" == "$output_realpath" ]] && return
+    
     # Skip if should be ignored
     should_ignore "$file" "$base_dir" && return
     

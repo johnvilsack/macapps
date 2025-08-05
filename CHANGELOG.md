@@ -1,5 +1,8 @@
 # Changelog
 
+## [1.11.2] - 2025-08-05
+- FIX: Fixed ccombo recursion issue
+
 ## [1.11.1] - 2025-08-05
 - FIX: Fixed zoxide-datatools unquoted csv issue
 
