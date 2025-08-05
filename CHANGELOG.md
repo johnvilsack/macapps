@@ -1,5 +1,8 @@
 # Changelog
 
+## [1.11.1] - 2025-08-05
+- FIX: Fixed zoxide-datatools unquoted csv issue
+
 ## [1.11.0] - 2025-08-05
 - MINOR: Updated zoxide-datatools to include sort on export
 
