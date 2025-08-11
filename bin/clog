@@ -1,67 +1,47 @@
 #!/usr/bin/env bash
+# Ensure we are running under bash even if invoked from zsh/dash
+[ -n "${BASH_VERSION:-}" ] || exec /usr/bin/env bash "$0" "$@"
+set -euo pipefail
 
 # clog - Cross-platform colorized logging utility with file output
 # Usage: clog LEVEL "message"
 # Example: clog INFO "This is an informational message"
-
-set -euo pipefail
 
 VERSION="2.0.0"
 PROGRAM_NAME="clog"
 
 # ============================================================================
 # DEFAULT CONFIGURATION SECTION
-# These can be overridden by environment variables or command line arguments
 # ============================================================================
 
-# File logging defaults
 DEFAULT_LOG_PATH="$HOME/Library/Logs/clog"
 DEFAULT_LOG_FILENAME="main.log"
 DEFAULT_LOG_TAG="${CLOG_TAG:-clog}"
-DEFAULT_SHOW_TIMESTAMP=false # Already included in file format, but controls console output
+DEFAULT_SHOW_TIMESTAMP=false
 DEFAULT_SHOW_PID=false
 DEFAULT_OUTPUT_JSON=false
 DEFAULT_DISABLE_COLOR=false
 DEFAULT_DISPLAY_TAG=false
 
-# Log rotation defaults
-DEFAULT_MAX_SIZE=5242880  # 5MB in bytes
-DEFAULT_MAX_ROTATED_FILES=10  # Number of rotated logs to keep
+DEFAULT_MAX_SIZE=5242880
+DEFAULT_MAX_ROTATED_FILES=10
 
 # ============================================================================
-# END CONFIGURATION SECTION
+# COLOR DEFINITIONS
 # ============================================================================
-
-# Color definitions (compatible with both macOS and Linux)
-# Get all colors
-# curl -s https://gist.githubusercontent.com/HaleTom/89ffe32783f89f403bba96bd7bcd1263/raw/e50a28ec54188d2413518788de6c6367ffcea4f7/print256colours.sh | bash
-
-# Foreground: \e[38;5;<n>m
-# Background: \e[48;5;<n>m
-# Reset: \e[0m
-# Styles
-#    1; bold,
-#    2; dim,
-#    3; italic,
-#    4; underline,
-#    5; blink,
-#    7; reverse,
-#    8; hidden
-
 declare -A COLORS=(
-    ["INFO"]="\e[1;38;5;33m"      # Blue
-    ["WARNING"]="\e[1;38;5;208m"   # Yellow  
-    ["ERROR"]="\e[1;38;5;197m"     # Red
-    ["SUCCESS"]="\e[1;38;5;46m"   # Green
-    ["DEBUG"]="\e[1;38;5;93m"     # Magenta
-    ["TRACE"]="\e[1;38;5;207m"     # Cyan
-
-   
-
+    ["INFO"]="\e[1;38;5;33m"
+    ["WARNING"]="\e[1;38;5;208m"
+    ["ERROR"]="\e[1;38;5;197m"
+    ["SUCCESS"]="\e[1;38;5;46m"
+    ["DEBUG"]="\e[1;38;5;93m"
+    ["TRACE"]="\e[1;38;5;207m"
 )
 COLOR_RESET="\e[0m"
 
-# Initialize variables from defaults or environment
+# ============================================================================
+# INITIALIZE VARIABLES
+# ============================================================================
 LOG_PATH="${CLOG_PATH:-$DEFAULT_LOG_PATH}"
 LOG_FILENAME="${CLOG_FILENAME:-$DEFAULT_LOG_FILENAME}"
 LOG_TAG="${CLOG_TAG:-$DEFAULT_LOG_TAG}"
@@ -73,12 +53,13 @@ MAX_SIZE="${CLOG_MAX_SIZE:-$DEFAULT_MAX_SIZE}"
 MAX_ROTATED_FILES="${CLOG_MAX_ROTATED_FILES:-$DEFAULT_MAX_ROTATED_FILES}"
 DISPLAY_TAG="${CLOG_DISPLAY_TAG:-$DEFAULT_DISPLAY_TAG}"
 
-# Check if we should disable color (non-TTY, NO_COLOR env var, etc.)
 if [[ ! -t 1 ]] || [[ -n "${NO_COLOR:-}" ]] || [[ "${TERM:-}" == "dumb" ]]; then
     DISABLE_COLOR=true
 fi
 
-# Help function
+# ============================================================================
+# FUNCTIONS
+# ============================================================================
 show_help() {
     cat << EOF
 $PROGRAM_NAME v$VERSION - Cross-platform colorized logging utility with file output
@@ -87,71 +68,10 @@ USAGE:
     $PROGRAM_NAME [OPTIONS] LEVEL "message"
 
 LEVELS:
-    INFO        Informational messages (blue)
-    WARNING     Warning messages (yellow)
-    ERROR       Error messages (red)
-    SUCCESS     Success messages (green)
-    DEBUG       Debug messages (magenta)
-    TRACE       Trace messages (cyan)
-
-OPTIONS:
-    -h, --help          Show this help message
-    -v, --version       Show version information
-    -t, --timestamp     Include timestamp in console output
-    -p, --pid           Include process ID in output
-    -j, --json          Output in JSON format
-    -c, --no-color      Disable colored console output
-    --tag TAG           Set log tag (default: $DEFAULT_LOG_TAG)
-    --path PATH         Set log directory path (default: $DEFAULT_LOG_PATH)
-    --filename NAME     Set log filename (default: $DEFAULT_LOG_FILENAME)
-    --max-size BYTES    Set max log size before rotation (default: $DEFAULT_MAX_SIZE)
-    --max-files NUM     Set max number of rotated files (default: $DEFAULT_MAX_ROTATED_FILES)
-    --display-tag          Show log tag in console output if not default
-    --no-display-tag       Suppress tag from console output
-
-ENVIRONMENT VARIABLES:
-    CLOG_PATH               Log directory path
-    CLOG_FILENAME           Log filename
-    CLOG_TAG                Log tag
-    CLOG_SHOW_TIMESTAMP     Show timestamp in console (true/false)
-    CLOG_SHOW_PID           Show PID in output (true/false)
-    CLOG_OUTPUT_JSON        Output JSON format (true/false)
-    CLOG_DISABLE_COLOR      Disable colors (true/false)
-    CLOG_MAX_SIZE           Max log file size in bytes
-    CLOG_MAX_ROTATED_FILES  Max number of rotated files to keep
-    CLOG_DISPLAY_TAG        Show log tag in console output (true/false)
-
-
-SET DEFAULTS:
-    export CLOG_PATH="$HOME/Library/Logs/clog"
-    export CLOG_FILENAME="main.log"
-    export CLOG_TAG="clog"
-    export CLOG_SHOW_TIMESTAMP=false
-    export CLOG_SHOW_PID=false
-    export CLOG_OUTPUT_JSON=false
-    export CLOG_DISABLE_COLOR=false
-    export CLOG_MAX_SIZE=5242880
-    export CLOG_MAX_ROTATED_FILES=10
-    export CLOG_DISPLAY_TAG=false
-
-FILE FORMAT:
-    [Mon Jan 15 10:30:45 2024] [TAG] [LEVEL] [PID] Message
-    (PID is optional based on SHOW_PID setting)
-
-EXAMPLES:
-    $PROGRAM_NAME INFO "Application started successfully"
-    $PROGRAM_NAME WARNING "Disk space is low"
-    $PROGRAM_NAME ERROR "Failed to connect to database"
-    $PROGRAM_NAME --tag myapp --path /var/log INFO "Custom location"
-    $PROGRAM_NAME --pid DEBUG "Debug with PID"
-
-LOG LOCATION:
-    Default: $DEFAULT_LOG_PATH/$DEFAULT_LOG_FILENAME
-    Override with --path and --filename or CLOG_PATH and CLOG_FILENAME
+    INFO, WARNING, ERROR, SUCCESS, DEBUG, TRACE
 EOF
 }
 
-# Create log directory if it doesn't exist
 ensure_log_directory() {
     local dir="$1"
     if [[ ! -d "$dir" ]]; then
@@ -162,39 +82,27 @@ ensure_log_directory() {
     fi
 }
 
-# Rotate log file if needed
 rotate_log_if_needed() {
     local logfile="$1"
     local maxsize="$2"
     local maxfiles="$3"
-    
-    # Check if log file exists and needs rotation
     if [[ -f "$logfile" ]]; then
         local filesize
         if [[ "$OSTYPE" == "darwin"* ]]; then
-            # macOS
             filesize=$(stat -f%z "$logfile" 2>/dev/null || echo 0)
         else
-            # Linux
             filesize=$(stat -c%s "$logfile" 2>/dev/null || echo 0)
         fi
-        
         if [[ $filesize -gt $maxsize ]]; then
-            local timestamp=$(date +%Y%m%d%H%M%S)
+            local timestamp
+            timestamp=$(date +%Y%m%d%H%M%S)
             local rotated_name="${logfile}.${timestamp}"
-            
-            # Rotate the current log
             mv "$logfile" "$rotated_name"
             gzip "$rotated_name"
-            
-            # Create new log file with proper permissions
             touch "$logfile"
             chmod 644 "$logfile"
-            
-            # Clean up old rotated files if needed
             if [[ $maxfiles -gt 0 ]]; then
                 local count=0
-                # List rotated files sorted by modification time (oldest first)
                 for old_log in $(ls -t "${logfile}".*.gz 2>/dev/null | tail -r); do
                     ((count++))
                     if [[ $count -gt $maxfiles ]]; then
@@ -204,68 +112,55 @@ rotate_log_if_needed() {
             fi
         fi
     else
-        # Create new log file with proper permissions
         touch "$logfile"
         chmod 644 "$logfile"
     fi
 }
 
-# Format timestamp for log file
 format_file_timestamp() {
-    # Format: Mon Jan 15 10:30:45 2024
     date '+%a %b %d %H:%M:%S %Y'
 }
 
-# JSON output function
 output_json() {
     local level="$1"
     local message="$2"
-    local timestamp=$(date -u +"%Y-%m-%dT%H:%M:%S.%3NZ" 2>/dev/null || date -u +"%Y-%m-%dT%H:%M:%SZ")
-    
+    local timestamp
+    timestamp=$(date -u +"%Y-%m-%dT%H:%M:%S.%3NZ" 2>/dev/null || date -u +"%Y-%m-%dT%H:%M:%SZ")
     printf '{"timestamp":"%s","level":"%s","message":"%s","pid":%d,"tag":"%s"}\n' \
         "$timestamp" "$level" "$message" $$ "$LOG_TAG"
 }
 
-# Main logging function
 clog() {
     local level="$1"
     local message="$2"
-    
-    # Validate log level
-    if [[ -z "${COLORS[$level]:-}" ]]; then
+
+    # safe missing key check
+    if [[ -z "${COLORS[$level]+x}" ]]; then
         printf "${COLORS[ERROR]}[ERROR] Invalid log level: %s${COLOR_RESET}\n" "$level" >&2
         printf "Valid levels: %s\n" "$(printf "%s " "${!COLORS[@]}")" >&2
         return 1
     fi
-    
-    # Prepare log file path
+
     local logfile="${LOG_PATH}/${LOG_FILENAME}"
-    
-    # Ensure directory exists and rotate if needed
     ensure_log_directory "$LOG_PATH"
     rotate_log_if_needed "$logfile" "$MAX_SIZE" "$MAX_ROTATED_FILES"
-    
-    # Format log entry for file
-    local file_timestamp=$(format_file_timestamp)
+
+    local file_timestamp
+    file_timestamp=$(format_file_timestamp)
     local file_entry="[$file_timestamp] [$LOG_TAG] [$level]"
     if [[ "$SHOW_PID" == true ]]; then
         file_entry="$file_entry [$$]"
     fi
     file_entry="$file_entry $message"
-    
-    # Write to log file
     echo "$file_entry" >> "$logfile" || {
         echo "Error: Failed to write to log file: $logfile" >&2
     }
 
-    # Console output
     if [[ "$OUTPUT_JSON" == true ]]; then
         output_json "$level" "$message"
     else
-        # Prepare console output
         local timestamp=""
         [[ "$SHOW_TIMESTAMP" == true ]] && timestamp="[$(date '+%H:%M:%S')] "
-
         local tag_and_pid=""
         if [[ "${DISPLAY_TAG,,}" == "true" ]]; then
             if [[ "$SHOW_PID" == true ]]; then
@@ -276,156 +171,56 @@ clog() {
         elif [[ "$SHOW_PID" == true ]]; then
             tag_and_pid="[$$] "
         fi
-
         printf "%s${COLORS[$level]}%s[%s]${COLOR_RESET} %s\n" \
             "$timestamp" "$tag_and_pid" "$level" "$message"
-
-        ###
     fi
 }
 
-function hrline() {
+hrline() {
     echo "$(printf '\e[1;38;5;240m%*s\e[0m' "$(tput cols)" '' | tr ' ' '-')"
 }
 
-if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
-    # Special case: if you call “clog LINE” (or “clog line”), just print the hrline
+# ============================================================================
+# MAIN
+# ============================================================================
+if [[ "${BASH_SOURCE[0]-$0}" == "$0" ]]; then
     if [[ $# -eq 1 && "${1^^}" == "LINE" ]]; then
         hrline
         exit 0
     fi
-
-    # Parse command line arguments
     while [[ $# -gt 0 ]]; do
         case $1 in
-            -h|--help)
-                show_help
-                exit 0
-                ;;
-            -v|--version)
-                echo "$PROGRAM_NAME v$VERSION"
-                exit 0
-                ;;
-            -t|--timestamp)
-                SHOW_TIMESTAMP=true
-                shift
-                ;;
-            -p|--pid)
-                SHOW_PID=true
-                shift
-                ;;
-            -j|--json)
-                OUTPUT_JSON=true
-                shift
-                ;;
-            -c|--no-color)
-                DISABLE_COLOR=true
-                shift
-                ;;
-            --tag)
-                if [[ -n "${2:-}" ]]; then
-                    LOG_TAG="$2"
-                    shift 2
-                else
-                    echo "Error: --tag requires a value" >&2
-                    exit 1
-                fi
-                ;;
-            --tag=*)
-                LOG_TAG="${1#*=}"
-                shift
-                ;;
-            --path)
-                if [[ -n "${2:-}" ]]; then
-                    LOG_PATH="$2"
-                    shift 2
-                else
-                    echo "Error: --path requires a value" >&2
-                    exit 1
-                fi
-                ;;
-            --path=*)
-                LOG_PATH="${1#*=}"
-                shift
-                ;;
-            --filename)
-                if [[ -n "${2:-}" ]]; then
-                    LOG_FILENAME="$2"
-                    shift 2
-                else
-                    echo "Error: --filename requires a value" >&2
-                    exit 1
-                fi
-                ;;
-            --filename=*)
-                LOG_FILENAME="${1#*=}"
-                shift
-                ;;
-            --max-size)
-                if [[ -n "${2:-}" ]]; then
-                    MAX_SIZE="$2"
-                    shift 2
-                else
-                    echo "Error: --max-size requires a value" >&2
-                    exit 1
-                fi
-                ;;
-            --max-size=*)
-                MAX_SIZE="${1#*=}"
-                shift
-                ;;
-            --max-files)
-                if [[ -n "${2:-}" ]]; then
-                    MAX_ROTATED_FILES="$2"
-                    shift 2
-                else
-                    echo "Error: --max-files requires a value" >&2
-                    exit 1
-                fi
-                ;;
-            --max-files=*)
-                MAX_ROTATED_FILES="${1#*=}"
-                shift
-                ;;
-            --display-tag)
-                DISPLAY_TAG=true
-                shift
-                ;;
-            --no-display-tag)
-                DISPLAY_TAG=false
-                shift
-                ;;
-            --display-tag=*)
-                DISPLAY_TAG="${1#*=}"
-                shift
-                ;;
-            --no-display-tag=*)
-                DISPLAY_TAG="${1#*=}"
-                shift
-                ;;
-            -*)
-                echo "Error: Unknown option $1" >&2
-                show_help >&2
-                exit 1
-                ;;
-            *)
-                break
-                ;;
+            -h|--help) show_help; exit 0 ;;
+            -v|--version) echo "$PROGRAM_NAME v$VERSION"; exit 0 ;;
+            -t|--timestamp) SHOW_TIMESTAMP=true; shift ;;
+            -p|--pid) SHOW_PID=true; shift ;;
+            -j|--json) OUTPUT_JSON=true; shift ;;
+            -c|--no-color) DISABLE_COLOR=true; shift ;;
+            --tag) LOG_TAG="$2"; shift 2 ;;
+            --tag=*) LOG_TAG="${1#*=}"; shift ;;
+            --path) LOG_PATH="$2"; shift 2 ;;
+            --path=*) LOG_PATH="${1#*=}"; shift ;;
+            --filename) LOG_FILENAME="$2"; shift 2 ;;
+            --filename=*) LOG_FILENAME="${1#*=}"; shift ;;
+            --max-size) MAX_SIZE="$2"; shift 2 ;;
+            --max-size=*) MAX_SIZE="${1#*=}"; shift ;;
+            --max-files) MAX_ROTATED_FILES="$2"; shift 2 ;;
+            --max-files=*) MAX_ROTATED_FILES="${1#*=}"; shift ;;
+            --display-tag) DISPLAY_TAG=true; shift ;;
+            --no-display-tag) DISPLAY_TAG=false; shift ;;
+            --display-tag=*) DISPLAY_TAG="${1#*=}"; shift ;;
+            --no-display-tag=*) DISPLAY_TAG="${1#*=}"; shift ;;
+            -*) echo "Error: Unknown option $1" >&2; show_help >&2; exit 1 ;;
+            *) break ;;
         esac
     done
-
-    # Check for required arguments
     if [[ $# -lt 2 ]]; then
         echo "Error: Missing required arguments" >&2
         echo "Usage: $PROGRAM_NAME LEVEL \"message\"" >&2
         exit 1
     fi
-
-    # Extract level and message
     LEVEL=$(echo "$1" | tr '[:lower:]' '[:upper:]')
     shift
     MESSAGE="$*"
-
-    # Call main logging function
     clog "$LEVEL" "$MESSAGE"
 fi
